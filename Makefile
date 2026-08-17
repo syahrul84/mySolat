@@ -33,10 +33,9 @@ WIDGET_SRC := $(wildcard Sources/Widget/*.swift)
 TEST_SRC   := $(wildcard Tests/*.swift)
 
 ARCHS       := arm64 x86_64
-SWIFT_FLAGS := -O -parse-as-library -swift-version 5 \
-               -framework AppKit -framework SwiftUI -framework WidgetKit \
-               -framework UserNotifications -framework CoreLocation \
-               -framework ServiceManagement -framework CryptoKit
+# Frameworks are auto-linked from the `import` statements; listing them again here
+# only produced duplicate LC_LOAD_DYLIB entries.
+SWIFT_FLAGS := -O -parse-as-library -swift-version 5
 
 # Ad-hoc signature. Set CODESIGN_ID="Developer ID Application: …" to sign properly.
 CODESIGN_ID ?= -
@@ -54,10 +53,21 @@ app: $(APP_BUNDLE)
 	@lipo -archs $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME) | sed 's/^/  app:    /'
 	@lipo -archs $(APPEX)/Contents/MacOS/$(WIDGET_NAME) | sed 's/^/  widget: /'
 
-$(APP_BUNDLE): $(SHARED_SRC) $(APP_SRC) $(WIDGET_SRC) Resources/App-Info.plist Resources/Widget-Info.plist Resources/zones.json
+$(APP_BUNDLE): $(SHARED_SRC) $(APP_SRC) $(WIDGET_SRC) Resources/App-Info.plist Resources/Widget-Info.plist Resources/zones.json $(BUILD_DIR)/.mode-universal
 	@$(MAKE) --no-print-directory bundle ARCH_MODE=universal
 
+# Both modes write to the same bundle path, so a mode marker forces a rebuild when
+# switching between them — otherwise `make` after `make native` would leave the
+# single-architecture binary in place and silently ship it.
+$(BUILD_DIR)/.mode-universal:
+	@mkdir -p $(BUILD_DIR)
+	@rm -f $(BUILD_DIR)/.mode-native
+	@touch $@
+
 native:
+	@mkdir -p $(BUILD_DIR)
+	@rm -f $(BUILD_DIR)/.mode-universal
+	@touch $(BUILD_DIR)/.mode-native
 	@$(MAKE) --no-print-directory bundle ARCH_MODE=native
 	@echo "✓ $(APP_BUNDLE)  (native only — use 'make' for a universal build)"
 
@@ -78,11 +88,18 @@ bundle:
 	    MODULE=$(APP_NAME)
 
 	@echo "→ compiling $(WIDGET_NAME) ($(ARCH_MODE))"
+	@# An app extension must enter through NSExtensionMain, which performs the
+	@# classic NSExtension bootstrap and lets WidgetKit hand the host our
+	@# WidgetBundle. Left at the default `_main`, Swift's @main instead takes the
+	@# newer ExtensionFoundation path, which has no EXAppExtensionAttributes to
+	@# match and aborts with "Unrecognized extension type" — so the widget never
+	@# reports its configuration and never shows up in the widget gallery.
+	@# Apple's own widget binaries link the same way.
 	@$(MAKE) --no-print-directory link \
 	    OUT=$(APPEX)/Contents/MacOS/$(WIDGET_NAME) \
 	    SRC="$(SHARED_SRC) $(WIDGET_SRC)" \
 	    MODULE=$(WIDGET_NAME) \
-	    EXTRA="-Xlinker -e -Xlinker _main"
+	    EXTRA="-Xlinker -e -Xlinker _NSExtensionMain"
 
 	@echo "→ assembling resources"
 	@sed -e 's/__VERSION__/$(VERSION)/g' -e 's/__BUILD__/$(BUILD_NUMBER)/g' \
