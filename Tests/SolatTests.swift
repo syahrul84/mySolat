@@ -302,6 +302,33 @@ func testCacheRoundTrip() {
           "prayer instant survives to the second")
 }
 
+// MARK: - Zone/cache reconciliation
+
+func testStoreIgnoresForeignZoneCache() async {
+    section("PrayerStore rejects a cache from another zone")
+    // Regression: the store used to adopt whatever cache was on disk regardless of
+    // zone, so the UI would label another zone's times with the selected zone's
+    // name. Neighbouring zones differ by only a minute or two, which made it
+    // almost invisible.
+    guard let onDisk = PrayerCacheFile.load() else {
+        print("  · no cache on disk — skipping (run the app once)")
+        return
+    }
+
+    let sameZone = PrayerStore(zone: onDisk.zone)
+    let adopted = await sameZone.coverageDays
+    check(adopted > 0, "cache is adopted for the matching zone \(onDisk.zone) (\(adopted) days)")
+
+    // A zone the cache definitely isn't for.
+    let foreign = onDisk.zone.uppercased() == "PLS01" ? "JHR02" : "PLS01"
+    let otherZone = PrayerStore(zone: foreign)
+    let leaked = await otherZone.coverageDays
+    checkEqual(leaked, 0, "cache is discarded for a different zone (\(foreign))")
+    let cache = await otherZone.currentCache
+    checkEqual(cache.zone, foreign, "store reports the requested zone, not the cached one")
+    check(await otherZone.nextEvent() == nil, "no events leak from the other zone")
+}
+
 // MARK: - Zone catalog
 
 func testZoneCatalog() {
@@ -395,6 +422,7 @@ struct TestRunner {
         testFormatting()
         testPreferences()
         testCacheRoundTrip()
+        await testStoreIgnoresForeignZoneCache()
         testZoneCatalog()
         testWidgetDataPath()
         await testLiveAPI()

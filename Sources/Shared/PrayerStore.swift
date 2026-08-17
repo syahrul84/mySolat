@@ -19,7 +19,15 @@ actor PrayerStore {
     init(api: WaktuSolatAPI = WaktuSolatAPI(session: WaktuSolatAPI.makeDefaultSession()),
          zone: String) {
         self.api = api
-        self.cache = PrayerCacheFile.load() ?? .empty(zone: zone)
+        // Only adopt the cached schedule when it belongs to the requested zone.
+        // Otherwise the app would serve another zone's times under this zone's
+        // name — the UI labels rows from the preference, not from the cache.
+        // Happens whenever the zone preference and the cache fall out of step.
+        if let disk = PrayerCacheFile.load(), disk.zone.caseInsensitiveCompare(zone) == .orderedSame {
+            self.cache = disk
+        } else {
+            self.cache = .empty(zone: zone)
+        }
     }
 
     // MARK: Reads
@@ -124,10 +132,15 @@ actor PrayerStore {
     }
 
     /// Reloads from disk — used by the widget and after an external write.
+    ///
+    /// Guards on zone for the same reason `init` does: a cache for a different zone
+    /// must never be adopted silently.
     func reloadFromDisk() {
-        if let disk = PrayerCacheFile.load(), disk.fetchedAt >= cache.fetchedAt {
-            cache = disk
-        }
+        guard let disk = PrayerCacheFile.load(),
+              disk.zone.caseInsensitiveCompare(cache.zone) == .orderedSame,
+              disk.fetchedAt >= cache.fetchedAt
+        else { return }
+        cache = disk
     }
 
     // MARK: Helpers

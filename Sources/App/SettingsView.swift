@@ -601,7 +601,28 @@ private struct AboutSettings: View {
                 Text("Malaysian prayer times in your menu bar")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                Text(AppVersion.displayString)
+                Text("Version \(AppVersion.displayString)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            VStack(spacing: 4) {
+                Text("Created by \(AppIdentifiers.authorName)")
+                    .font(.system(size: 12, weight: .medium))
+
+                HStack(spacing: 4) {
+                    Text("© 2026 \(AppIdentifiers.authorName) ·")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Button(AppIdentifiers.licenseName) {
+                        NSWorkspace.shared.open(AppIdentifiers.licenseURL)
+                    }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11))
+                    .help("Read the licence on GitHub")
+                }
+
+                Text("Free and open source software.")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }

@@ -16,7 +16,14 @@ enum AppIdentifiers {
     static var latestReleaseURL: URL {
         URL(string: "https://github.com/\(repoOwner)/\(repoName)/releases/latest")!
     }
+    static var licenseURL: URL {
+        URL(string: "https://github.com/\(repoOwner)/\(repoName)/blob/main/LICENSE")!
+    }
     static var tipURL: URL { URL(string: "https://ko-fi.com/syahrul84")! }
+
+    /// Shown in the About pane and the bundle's copyright field.
+    static let authorName = "Syahrul Farhan"
+    static let licenseName = "MIT License"
 }
 
 /// Where the app and the widget meet on disk.

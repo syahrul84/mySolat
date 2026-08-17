@@ -13,6 +13,7 @@
 #   make sign-release  sign the zip with the Ed25519 update key
 #   make updater-keys  generate the Ed25519 key pair used by sign-release
 #   make test        run the test suite
+#   make screenshots regenerate the widget images used in the README
 #   make clean
 
 APP_NAME      := mySolat
@@ -41,7 +42,7 @@ SWIFT_FLAGS := -O -parse-as-library -swift-version 5
 CODESIGN_ID ?= -
 
 .DEFAULT_GOAL := app
-.PHONY: app native run install zip dmg release sign-release updater-keys clean check test version help
+.PHONY: app native run install zip dmg release sign-release updater-keys clean check test screenshots version help
 
 help:
 	@grep -E '^#   make' Makefile | sed 's/^#   //'
@@ -196,6 +197,21 @@ updater-keys:
 
 test: $(BUILD_DIR)/solat-tests
 	@$(BUILD_DIR)/solat-tests
+
+# Regenerates the widget images in the README from the real views and the real
+# cached prayer times. SolatWidget.swift is excluded because its @main would
+# collide with the renderer's.
+WIDGET_VIEW_SRC := $(filter-out Sources/Widget/SolatWidget.swift,$(WIDGET_SRC))
+
+screenshots: $(BUILD_DIR)/render-widgets
+	@$(BUILD_DIR)/render-widgets docs/screenshots
+
+$(BUILD_DIR)/render-widgets: $(SHARED_SRC) $(WIDGET_VIEW_SRC) scripts/render-widgets.swift
+	@mkdir -p $(BUILD_DIR)
+	@swiftc -swift-version 5 -parse-as-library \
+	    -target $$(uname -m)-apple-macosx$(DEPLOY_TARGET) \
+	    -module-name RenderWidgets \
+	    -o $@ $(SHARED_SRC) $(WIDGET_VIEW_SRC) scripts/render-widgets.swift
 
 $(BUILD_DIR)/solat-tests: $(SHARED_SRC) $(TEST_SRC)
 	@mkdir -p $(BUILD_DIR)

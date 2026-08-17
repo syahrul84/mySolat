@@ -30,7 +30,7 @@ struct PrayerWidgetView: View {
 
 // MARK: - Small: next prayer only
 
-private struct SmallWidget: View {
+struct SmallWidget: View {
     let entry: PrayerEntry
 
     var body: some View {
@@ -69,7 +69,7 @@ private struct SmallWidget: View {
 
 // MARK: - Medium: today's list, two columns
 
-private struct MediumWidget: View {
+struct MediumWidget: View {
     let entry: PrayerEntry
 
     private var rows: [PrayerEvent] {
@@ -113,7 +113,7 @@ private struct MediumWidget: View {
 
 // MARK: - Large: full day + countdown
 
-private struct LargeWidget: View {
+struct LargeWidget: View {
     let entry: PrayerEntry
 
     private var rows: [PrayerEvent] {
