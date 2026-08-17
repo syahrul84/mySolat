@@ -7,7 +7,7 @@ enum AppIdentifiers {
     static let widgetKind = "com.syahrul.mySolat.PrayerWidget"
     static let appGroup = "group.com.syahrul.mySolat"
 
-    static let repoOwner = "syahrul"
+    static let repoOwner = "syahrul84"
     static let repoName = "mySolat"
     static var repoURL: URL { URL(string: "https://github.com/\(repoOwner)/\(repoName)")! }
     static var releasesAPIURL: URL {

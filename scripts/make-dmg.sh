@@ -29,7 +29,7 @@ To install:
 
 Look for the crescent-moon icon in your menu bar — mySolat has no Dock icon.
 
-Source and issues: https://github.com/syahrul/mySolat
+Source and issues: https://github.com/syahrul84/mySolat
 TXT
 
 mkdir -p "$(dirname "$OUT")"

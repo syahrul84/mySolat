@@ -10,10 +10,10 @@ Waktu solat JAKIM — always visible, works offline, and reminds you before each
 
 <img src="docs/screenshots/menubar.png" width="150" alt="mySolat in the menu bar">
 
-[![CI](https://github.com/syahrul/mySolat/actions/workflows/ci.yml/badge.svg)](https://github.com/syahrul/mySolat/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/syahrul/mySolat?label=download)](https://github.com/syahrul/mySolat/releases/latest)
+[![CI](https://github.com/syahrul84/mySolat/actions/workflows/ci.yml/badge.svg)](https://github.com/syahrul84/mySolat/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/syahrul84/mySolat?label=download)](https://github.com/syahrul84/mySolat/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![macOS](https://img.shields.io/badge/macOS-13%2B%20·%20Intel%20%26%20Apple%20silicon-lightgrey)](https://github.com/syahrul/mySolat/releases/latest)
+[![macOS](https://img.shields.io/badge/macOS-13%2B%20·%20Intel%20%26%20Apple%20silicon-lightgrey)](https://github.com/syahrul84/mySolat/releases/latest)
 
 </div>
 
@@ -68,7 +68,7 @@ Small, medium and large — for the desktop and Notification Center.
 
 ## Install
 
-Download the latest `.dmg` from **[Releases](https://github.com/syahrul/mySolat/releases/latest)**, drag mySolat into Applications, then **right-click it and choose Open**.
+Download the latest `.dmg` from **[Releases](https://github.com/syahrul84/mySolat/releases/latest)**, drag mySolat into Applications, then **right-click it and choose Open**.
 
 > macOS asks for that right-click the first time because the app isn't notarized by Apple — notarization needs a paid Apple Developer account. Every launch after the first is normal, and auto-updates install without prompting.
 
@@ -166,7 +166,7 @@ Right-click the desktop → **Edit Widgets**, search **mySolat**, then drag the 
 **Xcode is not required.** The Command Line Tools are enough — there's no `.xcodeproj` and no SwiftPM manifest, just `swiftc` driven by a `Makefile`.
 
 ```bash
-git clone https://github.com/syahrul/mySolat.git
+git clone https://github.com/syahrul84/mySolat.git
 cd mySolat
 make run
 ```
