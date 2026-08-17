@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The main app is deliberately NOT sandboxed:
+	   - it replaces its own bundle when auto-updating, and
+	   - it registers itself as a login item via SMAppService.
+	  Both are blocked inside the App Sandbox. The widget extension IS sandboxed
+	  (see SolatWidget.entitlements) and reaches the cache via the app group below.
+	-->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.syahrul.mySolat</string>
+	</array>
+</dict>
+</plist>

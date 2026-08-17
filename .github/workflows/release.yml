@@ -1,0 +1,105 @@
+name: Release
+
+# Tag a version to publish it:
+#   git tag v1.0.1 && git push origin v1.0.1
+#
+# Produces a GitHub Release carrying the three assets the in-app updater needs:
+#   mySolat-<version>-universal.zip   the update payload
+#   checksums.txt                     SHA-256 the app verifies before installing
+#   mySolat-<version>.dmg             for manual/first-time installs
+# Plus a .sig when the UPDATE_SIGNING_KEY secret is configured.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v (e.g. 1.0.1)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # Build number = total commit count, so it always increases.
+          echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION"
+
+      - name: Type-check
+        run: make check
+
+      - name: Run tests
+        run: make test
+
+      - name: Build release artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build }}
+        run: make release
+
+      - name: Sign the update archive
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: make sign-release
+
+      - name: Verify the archive the updater will download
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd dist
+          shasum -a 256 -c checksums.txt
+          mkdir -p verify
+          ditto -x -k "mySolat-${VERSION}-universal.zip" verify/
+          codesign --verify --deep --strict verify/mySolat.app
+          PLIST=verify/mySolat.app/Contents/Info.plist
+          GOT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
+          test "$GOT" = "$VERSION" || { echo "version mismatch: $GOT != $VERSION"; exit 1; }
+          lipo -archs verify/mySolat.app/Contents/MacOS/mySolat | grep -q arm64
+          lipo -archs verify/mySolat.app/Contents/MacOS/mySolat | grep -q x86_64
+          rm -rf verify
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: mySolat ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/mySolat-${{ steps.version.outputs.version }}-universal.zip
+            dist/mySolat-${{ steps.version.outputs.version }}.dmg
+            dist/checksums.txt
+          body: |
+            ## Install
+
+            **First time:** download the `.dmg`, drag mySolat to Applications, then
+            right-click it and choose **Open** (macOS asks once because the app
+            isn't notarized by Apple).
+
+            **Already have mySolat?** Do nothing — it updates itself. Or use
+            Settings › Updates › Check Now.
+
+            Universal build: Apple silicon and Intel. Requires macOS 13 Ventura or later.
+
+            ---
+            Prayer times from [waktusolat.app](https://waktusolat.app) (JAKIM).
+            If mySolat is useful to you, [buy me a coffee](https://ko-fi.com/syahrul84) ☕

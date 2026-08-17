@@ -1,0 +1,29 @@
+# Build output
+build/
+dist/
+
+# Update signing key — must never be committed.
+# The private key belongs in a password manager and in the repo's
+# UPDATE_SIGNING_KEY GitHub Actions secret.
+*.private
+update-key*
+*.sig
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Xcode / SwiftPM (unused here, but harmless to guard against)
+*.xcodeproj/
+*.xcworkspace/
+.swiftpm/
+.build/
+Package.resolved
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~

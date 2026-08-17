@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>mySolat</string>
+	<key>CFBundleExecutable</key>
+	<string>mySolat</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.syahrul.mySolat</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>mySolat</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.reference</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+
+	<!-- Menu bar agent: no Dock icon, no ⌘-Tab entry. -->
+	<key>LSUIElement</key>
+	<true/>
+
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Syahrul Farhan. MIT licensed. Prayer data © JAKIM via waktusolat.app.</string>
+
+	<!-- Shown when the user taps "Detect" in the zone picker. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>mySolat uses your location once to find the JAKIM prayer zone nearest to you. Your location is never stored or shared.</string>
+
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
+
+	<!--
+	  Optional update hardening. Paste the base64 Ed25519 public key produced by
+	  `make updater-keys` here, and CI will sign each release archive. When this is
+	  empty, updates are verified by SHA-256 against the release's checksums.txt.
+	-->
+	<key>UpdatePublicKey</key>
+	<string></string>
+</dict>
+</plist>

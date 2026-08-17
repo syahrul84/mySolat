@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- macOS requires widget extensions to be sandboxed. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Reads the prayer cache written by the app. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.syahrul.mySolat</string>
+	</array>
+
+	<!-- Fallback direct fetch when the shared cache is unavailable. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

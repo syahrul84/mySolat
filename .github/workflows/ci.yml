@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcrun --show-sdk-version
+
+      - name: Type-check both targets
+        run: make check
+
+      # The live API smoke test is skipped here so a waktusolat.app outage can't
+      # turn every pull request red. The release workflow runs it for real.
+      - name: Run tests
+        env:
+          SOLAT_SKIP_NETWORK: "1"
+        run: make test
+
+      - name: Build universal app
+        run: make
+
+      - name: Verify universal slices and signature
+        run: |
+          lipo -archs build/mySolat.app/Contents/MacOS/mySolat | tee /tmp/archs
+          grep -q arm64 /tmp/archs
+          grep -q x86_64 /tmp/archs
+          lipo -archs build/mySolat.app/Contents/PlugIns/SolatWidget.appex/Contents/MacOS/SolatWidget
+          codesign --verify --deep --strict build/mySolat.app
+
+      - name: Package
+        run: make zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mySolat-dev-build
+          path: dist/*.zip
+          retention-days: 14
