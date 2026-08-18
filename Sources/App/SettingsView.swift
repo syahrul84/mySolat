@@ -74,9 +74,12 @@ private struct LocationSettings: View {
     @State private var isDetecting = false
     @State private var detectError: String?
 
-    private var results: [(negeri: String, zones: [Zone])] {
-        let matching = ZoneCatalog.shared.search(search)
-        return Dictionary(grouping: matching, by: \.negeri)
+    /// Grouping and sorting 60 zones is cheap once, but it was being redone on
+    /// every render. Held in state and recomputed only when the query changes.
+    @State private var results: [(negeri: String, zones: [Zone])] = []
+
+    private static func group(matching query: String) -> [(negeri: String, zones: [Zone])] {
+        Dictionary(grouping: ZoneCatalog.shared.search(query), by: \.negeri)
             .map { (negeri: $0.key, zones: $0.value.sorted { $0.jakimCode < $1.jakimCode }) }
             .sorted { $0.negeri < $1.negeri }
     }
@@ -113,6 +116,9 @@ private struct LocationSettings: View {
 
             TextField("Search state, district or code…", text: $search)
                 .textFieldStyle(.roundedBorder)
+                .onValueChange(of: search) { query in
+                    results = Self.group(matching: query)
+                }
 
             List {
                 ForEach(results, id: \.negeri) { group in
@@ -127,6 +133,7 @@ private struct LocationSettings: View {
             }
             .listStyle(.inset)
             .frame(minHeight: 260)
+            .onAppear { if results.isEmpty { results = Self.group(matching: search) } }
 
             HStack(spacing: 6) {
                 Image(systemName: state.coverageIsHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -144,12 +151,16 @@ private struct LocationSettings: View {
         }
     }
 
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f
+    }()
+
     private var coverageText: String {
         var text = "\(state.coverageDays) days of prayer times stored offline"
         if let last = state.lastFetch {
-            let f = RelativeDateTimeFormatter()
-            f.unitsStyle = .short
-            text += " · updated \(f.localizedString(for: last, relativeTo: Date()))"
+            text += " · updated \(Self.relativeFormatter.localizedString(for: last, relativeTo: Date()))"
         }
         return text
     }
@@ -369,7 +380,7 @@ private struct AppearanceSettings: View {
                             .foregroundStyle(.secondary)
                         HStack(spacing: 4) {
                             Image(systemName: state.menuBarSymbol)
-                            if !state.menuBarTitle.isEmpty { Text(state.menuBarTitle) }
+                            if !state.menuBarTitle().isEmpty { Text(state.menuBarTitle()) }
                         }
                         .font(.system(size: 12))
                         .padding(.horizontal, 6)
@@ -434,6 +445,8 @@ private struct UpdateSettings: View {
     @EnvironmentObject private var state: AppState
     @State private var autoCheck = true
 
+    private static let relativeFormatter = RelativeDateTimeFormatter()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             GroupBox("Automatic updates") {
@@ -448,8 +461,7 @@ private struct UpdateSettings: View {
                             .disabled(state.updater.phase.isBusy)
                         Spacer()
                         if let last = state.updater.lastChecked {
-                            let f = RelativeDateTimeFormatter()
-                            Text("Checked \(f.localizedString(for: last, relativeTo: Date()))")
+                            Text("Checked \(Self.relativeFormatter.localizedString(for: last, relativeTo: Date()))")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.tertiary)
                         }

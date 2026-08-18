@@ -11,15 +11,19 @@ struct mySolatApp: App {
         MenuBarExtra {
             PopoverView()
                 .environmentObject(state)
+                .environmentObject(state.clock)
         } label: {
             MenuBarLabel()
                 .environmentObject(state)
+                .environmentObject(state.menuBarClock)
         }
         .menuBarExtraStyle(.window)
 
         // A regular window rather than the `Settings` scene: this app is an
         // LSUIElement agent, and a plain window is reliable to raise from the
         // popover without an app menu to host ⌘,.
+        // No `.environmentObject(state.clock)` here on purpose: the settings
+        // window must not re-render on the 1 Hz tick.
         Window("mySolat Settings", id: SettingsWindow.id) {
             SettingsView()
                 .environmentObject(state)
@@ -36,16 +40,20 @@ enum SettingsWindow {
 /// The menu bar label. Kept tiny so the 1 Hz tick redraws as little as possible.
 private struct MenuBarLabel: View {
     @EnvironmentObject private var state: AppState
+    /// The coarse clock. Stopped entirely unless the style shows a countdown, in
+    /// which case observing it is what redraws the label.
+    @EnvironmentObject private var clock: Ticker
 
     var body: some View {
+        let title = state.menuBarTitle(now: clock.now)
         HStack(spacing: 4) {
             Image(systemName: state.menuBarSymbol)
-            if !state.menuBarTitle.isEmpty {
-                Text(state.menuBarTitle)
+            if !title.isEmpty {
+                Text(title)
             }
         }
-        // Re-evaluate whenever the countdown ticks.
-        .id(state.menuBarTitle + state.menuBarSymbol)
+        // Re-evaluate whenever the rendered text changes.
+        .id(title + state.menuBarSymbol)
         // The menu bar label is the one view guaranteed to exist for an agent
         // app, so it owns kicking off timers and the first fetch.
         .task { state.start() }

@@ -19,8 +19,16 @@ final class AppState: ObservableObject {
     @Published private(set) var notificationsAuthorized = false
     @Published private(set) var scheduledAlertCount = 0
 
-    /// Bumped every second so countdown views re-render.
-    @Published private(set) var tick = Date()
+    /// 1 Hz, for the popover's h:mm:ss countdown. Retained only while the popover
+    /// is on screen.
+    let clock = Ticker(interval: 1)
+
+    /// Coarse clock for the menu bar. The menu bar countdown is minute-granular
+    /// ("1h 12m"), so a second-by-second redraw was 15× more work than the text
+    /// could ever reflect — and each redraw replicates across every display.
+    /// Only runs for the two countdown styles; the others change when the prayer
+    /// does, which `AppState` already publishes.
+    let menuBarClock = Ticker(interval: 15)
 
     // MARK: Collaborators
 
@@ -52,6 +60,7 @@ final class AppState: ObservableObject {
 
         startTimers()
         observeWake()
+        updateMenuBarClock()
 
         Task {
             await refreshFromCache()
@@ -65,6 +74,7 @@ final class AppState: ObservableObject {
     }
 
     func stop() {
+        if menuBarClock.isRunning { menuBarClock.release() }
         uiTimer?.invalidate()
         maintenanceTimer?.invalidate()
         if let wakeObserver {
@@ -99,13 +109,11 @@ final class AppState: ObservableObject {
 
     /// Runs at 1 Hz, so it must stay cheap.
     ///
-    /// Publishing `tick` is enough to redraw the countdown — the menu bar title and
-    /// popover derive their text from it. The event list is only re-scanned when the
-    /// prayer we were counting down to has actually passed, rather than sorting
-    /// hundreds of cached events every second.
+    /// This publishes nothing on a normal tick — `Ticker` drives the countdown
+    /// redraws. All this does is compare two dates, and only touch published state
+    /// when the prayer we were counting down to has actually passed.
     private func onTick() {
         let now = Date()
-        tick = now
 
         guard let next = nextEvent else {
             // No next event known (cold start, or cache just replaced).
@@ -218,8 +226,23 @@ final class AppState: ObservableObject {
         await changeZone(to: code)
     }
 
+    /// Starts or stops the menu bar clock to match the current display style.
+    private func updateMenuBarClock() {
+        let needsTicking: Bool
+        switch prefs.menuBarStyle {
+        case .nameAndCountdown, .countdownOnly: needsTicking = true
+        case .nameAndTime, .timeOnly, .iconOnly: needsTicking = false
+        }
+        if needsTicking, !menuBarClock.isRunning {
+            menuBarClock.retain()
+        } else if !needsTicking, menuBarClock.isRunning {
+            menuBarClock.release()
+        }
+    }
+
     /// Called after any notification-related setting changes.
     func settingsChanged() async {
+        updateMenuBarClock()
         await ensureSchedule()
         reloadWidget()
         objectWillChange.send()
@@ -255,11 +278,11 @@ final class AppState: ObservableObject {
         return today.events.filter { visible.contains($0.prayer) }
     }
 
-    /// The text drawn in the menu bar.
-    var menuBarTitle: String {
+    /// The text drawn in the menu bar at a given instant.
+    func menuBarTitle(now: Date = Date()) -> String {
         guard let nextEvent else { return coverageDays == 0 ? "—" : "…" }
         let time = SolatCalendar.string(for: nextEvent.date, use24Hour: prefs.use24HourClock)
-        let countdown = SolatCalendar.countdownString(until: nextEvent.date, from: tick)
+        let countdown = SolatCalendar.countdownString(until: nextEvent.date, from: now)
 
         switch prefs.menuBarStyle {
         case .nameAndTime: return "\(nextEvent.prayer.displayName) \(time)"

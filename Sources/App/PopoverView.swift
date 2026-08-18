@@ -4,6 +4,7 @@ import SwiftUI
 /// The panel shown when the menu bar item is clicked.
 struct PopoverView: View {
     @EnvironmentObject private var state: AppState
+    @EnvironmentObject private var clock: Ticker
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -19,6 +20,10 @@ struct PopoverView: View {
             footer
         }
         .frame(width: 300)
+        // The 1 Hz clock exists for this view's countdown; a closed popover
+        // shouldn't cost a timer wake-up per second.
+        .onAppear { clock.retain() }
+        .onDisappear { clock.release() }
     }
 
     // MARK: Header
@@ -50,7 +55,7 @@ struct PopoverView: View {
                 HStack(spacing: 6) {
                     Image(systemName: next.prayer.symbolName)
                         .foregroundStyle(.tint)
-                    Text("\(next.prayer.displayName) in \(SolatCalendar.preciseCountdownString(until: next.date, from: state.tick))")
+                    Text("\(next.prayer.displayName) in \(SolatCalendar.preciseCountdownString(until: next.date, from: clock.now))")
                         .font(.system(size: 12, weight: .medium))
                         .monospacedDigit()
                 }
@@ -93,7 +98,7 @@ struct PopoverView: View {
                     event: event,
                     isNext: state.nextEvent?.id == event.id,
                     isCurrent: state.currentEvent?.id == event.id,
-                    isPast: event.date < state.tick,
+                    isPast: event.date < clock.now,
                     use24Hour: state.prefs.use24HourClock,
                     isNotified: state.prefs.enabledPrayers.contains(event.prayer)
                 )
