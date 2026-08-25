@@ -211,7 +211,7 @@ $(BUILD_DIR)/gate-tests: $(SHARED_SRC) $(GATE_SRC)
 # Regenerates the widget images in the README from the real views and the real
 # cached prayer times. SolatWidget.swift is excluded because its @main would
 # collide with the renderer's.
-WIDGET_VIEW_SRC := $(filter-out Sources/Widget/SolatWidget.swift,$(WIDGET_SRC))
+WIDGET_VIEW_SRC := $(filter-out Sources/Widget/SolatWidget.swift,$(WIDGET_SRC)) Sources/App/PrayerAlertView.swift
 
 screenshots: $(BUILD_DIR)/render-widgets
 	@$(BUILD_DIR)/render-widgets docs/screenshots

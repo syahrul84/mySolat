@@ -1,4 +1,4 @@
-// Renders the widget views to PNGs for the README.
+// Renders the widget views and the prayer popup to PNGs for the README.
 //
 // This draws the real `PrayerWidgetView` with the real `PrayerTimelineProvider`
 // entry — the same code and the same cached prayer times the installed widget
@@ -108,6 +108,64 @@ struct RenderWidgets {
                     to: outputDir.appendingPathComponent("widget-\(spec.name).png")
                 )
             }
+        }
+
+        try await MainActor.run { try renderPopups(entry: entry, outputDir: outputDir) }
+    }
+
+    /// The on-screen alert, in both of its forms.
+    @MainActor
+    static func renderPopups(entry: PrayerEntry, outputDir: URL) throws {
+        let zone = entry.zoneDescription
+
+        // Pick recognisable obligatory prayers rather than whatever happens to be
+        // next — the literal next event can be Imsak, which isn't even notified by
+        // default and makes a confusing illustration.
+        func time(of prayer: Prayer, fallbackHour: Int) -> Date {
+            if let date = entry.day?.time(for: prayer) { return date }
+            var c = SolatCalendar.zoneCalendar.dateComponents([.year, .month, .day], from: Date())
+            c.hour = fallbackHour; c.minute = 0
+            c.timeZone = SolatCalendar.zoneTimeZone
+            return SolatCalendar.zoneCalendar.date(from: c) ?? Date()
+        }
+
+        let asr = time(of: .asr, fallbackHour: 16)
+        let maghrib = time(of: .maghrib, fallbackHour: 19)
+
+        let cases: [(name: String, alert: PrayerAlert)] = [
+            ("popup-before", PrayerAlert(prayer: .asr,
+                                         prayerDate: asr,
+                                         fireDate: asr.addingTimeInterval(-900),
+                                         kind: .beforePrayer,
+                                         minutesBefore: 15)),
+            ("popup-entered", PrayerAlert(prayer: .maghrib,
+                                          prayerDate: maghrib,
+                                          fireDate: maghrib,
+                                          kind: .atPrayerTime,
+                                          minutesBefore: 0)),
+        ]
+
+        for item in cases {
+            // autoDismissAfter 0 so the countdown line, which needs a live timer,
+            // doesn't render as a stale "closes in 0s".
+            let view = PrayerAlertView(alert: item.alert,
+                                       zoneDescription: zone,
+                                       use24Hour: false,
+                                       autoDismissAfter: 0) {}
+            let renderer = ImageRenderer(content:
+                view.frame(width: 380, height: 190)
+                    .background(Color(nsColor: .windowBackgroundColor))
+            )
+            renderer.proposedSize = ProposedViewSize(width: 380, height: 190)
+            renderer.scale = 2
+            guard let image = renderer.nsImage,
+                  let tiff = image.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:])
+            else { continue }
+            let url = outputDir.appendingPathComponent("\(item.name).png")
+            try png.write(to: url)
+            FileHandle.standardOutput.write("✓ \(item.name).png\n".data(using: .utf8)!)
         }
     }
 }
