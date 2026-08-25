@@ -35,6 +35,9 @@ final class AppState: ObservableObject {
     let prefs = Preferences()
     let updater = GitHubUpdater()
     let scheduler = NotificationScheduler()
+    let alerts = AlertPresenter()
+    /// Gates popups on the user actually being able to see them.
+    let screen = ScreenActivityMonitor()
     private let api = WaktuSolatAPI(session: WaktuSolatAPI.makeDefaultSession())
     private var store: PrayerStore
 
@@ -42,6 +45,13 @@ final class AppState: ObservableObject {
     private var maintenanceTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
     private var lastNotifiedEventID: String?
+
+    /// Upcoming popup moments, rebuilt whenever the schedule or settings change.
+    private var pendingAlerts: [PrayerAlert] = []
+    private var firedAlertIDs: Set<String> = []
+    /// Earliest un-fired alert. Lets the 1 Hz tick skip the whole scan with one
+    /// date comparison instead of filtering the list every second.
+    private var nextAlertFireDate: Date?
 
     init() {
         let preferences = Preferences()
@@ -57,6 +67,14 @@ final class AppState: ObservableObject {
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
+
+        firedAlertIDs = Set(prefs.firedAlertIDs)
+
+        // Unlocking or waking the display is the moment to reconsider anything
+        // that came due while the user was away.
+        screen.onBecameActive = { [weak self] in
+            Task { @MainActor in self?.firePopupsIfDue(now: Date()) }
+        }
 
         startTimers()
         observeWake()
@@ -114,6 +132,7 @@ final class AppState: ObservableObject {
     /// when the prayer we were counting down to has actually passed.
     private func onTick() {
         let now = Date()
+        firePopupsIfDue(now: now)
 
         guard let next = nextEvent else {
             // No next event known (cold start, or cache just replaced).
@@ -129,6 +148,79 @@ final class AppState: ObservableObject {
             lastNotifiedEventID = next.id
             resolveCurrentAndNext(at: now, thenReschedule: true)
         }
+    }
+
+    /// Raises any popup whose moment has arrived.
+    ///
+    /// Called once a second, so the common path is a cheap scan of a short list.
+    private func firePopupsIfDue(now: Date) {
+        // Fast path: nothing is due, so don't touch the list at all.
+        guard let earliest = nextAlertFireDate, now >= earliest else { return }
+
+        // Locked, asleep, or screen-savering: hold everything untouched. Nothing is
+        // shown and — crucially — nothing is marked as delivered, so it can still
+        // surface when the user comes back. `onBecameActive` re-enters here.
+        guard screen.isActive else { return }
+
+        let window = prefs.catchUpWindow
+
+        // Too late to be useful: retire silently rather than announce a prayer
+        // that passed hours ago.
+        let stale = PrayerAlertScheduler.expired(
+            from: pendingAlerts, now: now, already: firedAlertIDs, window: window
+        )
+        if !stale.isEmpty { markFired(stale) }
+
+        let due = PrayerAlertScheduler.due(
+            from: pendingAlerts, now: now, already: firedAlertIDs, window: window
+        )
+        guard let alert = due.last else {   // latest is the truthful one
+            recomputeNextAlertDate()
+            return
+        }
+        markFired(due)   // never replay the rest of a backlog
+        recomputeNextAlertDate()
+
+        let wantsPopup = alert.kind == .atPrayerTime ? prefs.popupAtPrayerTime : prefs.popupBeforePrayer
+        guard wantsPopup else { return }
+
+        alerts.present(alert, zoneDescription: zoneDescription, prefs: prefs)
+    }
+
+    /// Caches the soonest alert still to fire.
+    private func recomputeNextAlertDate() {
+        nextAlertFireDate = pendingAlerts
+            .filter { !firedAlertIDs.contains($0.id) }
+            .map(\.fireDate)
+            .min()
+    }
+
+    private func markFired(_ list: [PrayerAlert]) {
+        for alert in list { firedAlertIDs.insert(alert.id) }
+        // Persisted so a relaunch doesn't replay today's alerts.
+        prefs.firedAlertIDs = Array(firedAlertIDs).sorted()
+        firedAlertIDs = Set(prefs.firedAlertIDs)
+    }
+
+    /// Rebuilds the popup schedule from the cache and current settings.
+    private func rebuildAlerts() async {
+        let lookback = max(prefs.catchUpWindow, PrayerAlertScheduler.defaultCatchUpWindow)
+        let events = await store.upcomingEvents(from: Date().addingTimeInterval(-lookback), limit: 12)
+        pendingAlerts = PrayerAlertScheduler.alerts(for: events, prefs: prefs)
+        recomputeNextAlertDate()
+    }
+
+    /// Shows a sample popup so the user can see and hear what they've configured.
+    func previewAlert(kind: PrayerAlertKind) {
+        let event = nextEvent ?? PrayerEvent(prayer: .maghrib, date: Date().addingTimeInterval(900))
+        let alert = PrayerAlert(
+            prayer: event.prayer,
+            prayerDate: event.date,
+            fireDate: kind == .atPrayerTime ? event.date : event.date.addingTimeInterval(-Double(prefs.preAlertMinutes) * 60),
+            kind: kind,
+            minutesBefore: prefs.preAlertMinutes
+        )
+        alerts.present(alert, zoneDescription: zoneDescription, prefs: prefs)
     }
 
     private var isResolvingNext = false
@@ -155,6 +247,7 @@ final class AppState: ObservableObject {
     }
 
     private func performMaintenance() async {
+        screen.recomputeActive()
         await refresh(force: false)
         await ensureSchedule()
         reloadWidget()
@@ -205,6 +298,7 @@ final class AppState: ObservableObject {
             zoneDescription: ZoneCatalog.shared.describe(code: prefs.zoneCode)
         )
         scheduledAlertCount = scheduler.lastScheduledCount
+        await rebuildAlerts()
     }
 
     // MARK: Actions

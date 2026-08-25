@@ -31,7 +31,8 @@ DIST_DIR    := dist
 SHARED_SRC := $(wildcard Sources/Shared/*.swift)
 APP_SRC    := $(wildcard Sources/App/*.swift)
 WIDGET_SRC := $(wildcard Sources/Widget/*.swift)
-TEST_SRC   := $(wildcard Tests/*.swift)
+TEST_SRC   := $(filter-out Tests/ScreenGateTests.swift,$(wildcard Tests/*.swift))
+GATE_SRC   := Tests/ScreenGateTests.swift Sources/App/ScreenActivityMonitor.swift
 
 ARCHS       := arm64 x86_64
 # Frameworks are auto-linked from the `import` statements; listing them again here
@@ -195,8 +196,17 @@ updater-keys:
 
 # ---------------------------------------------------------------- misc
 
-test: $(BUILD_DIR)/solat-tests
+test: $(BUILD_DIR)/solat-tests $(BUILD_DIR)/gate-tests
 	@$(BUILD_DIR)/solat-tests
+	@echo ""
+	@$(BUILD_DIR)/gate-tests
+
+$(BUILD_DIR)/gate-tests: $(SHARED_SRC) $(GATE_SRC)
+	@mkdir -p $(BUILD_DIR)
+	@swiftc -swift-version 5 -parse-as-library \
+	    -target $$(uname -m)-apple-macosx$(DEPLOY_TARGET) \
+	    -module-name ScreenGateTests \
+	    -o $@ $(SHARED_SRC) $(GATE_SRC)
 
 # Regenerates the widget images in the README from the real views and the real
 # cached prayer times. SolatWidget.swift is excluded because its @main would

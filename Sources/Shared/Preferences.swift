@@ -35,6 +35,12 @@ enum PreferenceKeys {
     static let preAlertEnabled = "preAlertEnabled"
     static let enabledPrayers = "enabledPrayers"
     static let notificationSoundEnabled = "notificationSoundEnabled"
+    static let alertSoundName = "alertSoundName"
+    static let popupAtPrayerTime = "popupAtPrayerTime"
+    static let popupBeforePrayer = "popupBeforePrayer"
+    static let popupAutoDismissSeconds = "popupAutoDismissSeconds"
+    static let catchUpWindowMinutes = "catchUpWindowMinutes"
+    static let firedAlertIDs = "firedAlertIDs"
     static let launchAtLogin = "launchAtLogin"
     static let autoUpdateCheck = "autoUpdateCheck"
     static let lastUpdateCheck = "lastUpdateCheck"
@@ -59,6 +65,11 @@ struct Preferences {
             PreferenceKeys.preAlertEnabled: true,
             PreferenceKeys.preAlertMinutes: 15,
             PreferenceKeys.notificationSoundEnabled: true,
+            PreferenceKeys.alertSoundName: AlertSound.glass.rawValue,
+            PreferenceKeys.popupAtPrayerTime: true,
+            PreferenceKeys.popupBeforePrayer: true,
+            PreferenceKeys.popupAutoDismissSeconds: 30,
+            PreferenceKeys.catchUpWindowMinutes: 30,
             PreferenceKeys.enabledPrayers: Prayer.allCases.filter(\.isObligatory).map(\.rawValue),
             PreferenceKeys.launchAtLogin: false,
             PreferenceKeys.autoUpdateCheck: true,
@@ -117,6 +128,60 @@ struct Preferences {
     var notificationSoundEnabled: Bool {
         get { defaults.bool(forKey: PreferenceKeys.notificationSoundEnabled) }
         nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.notificationSoundEnabled) }
+    }
+
+    /// Sound played with the on-screen popup.
+    var alertSound: AlertSound {
+        get {
+            let raw = defaults.string(forKey: PreferenceKeys.alertSoundName) ?? ""
+            return AlertSound(rawValue: raw) ?? .glass
+        }
+        nonmutating set { defaults.set(newValue.rawValue, forKey: PreferenceKeys.alertSoundName) }
+    }
+
+    // MARK: On-screen popup
+    //
+    // Notification banners auto-hide after a few seconds, which is easy to miss.
+    // The popup is a floating panel that stays until dismissed (or until the
+    // auto-dismiss timer runs out) and shows above other apps.
+
+    var popupAtPrayerTime: Bool {
+        get { defaults.bool(forKey: PreferenceKeys.popupAtPrayerTime) }
+        nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.popupAtPrayerTime) }
+    }
+
+    var popupBeforePrayer: Bool {
+        get { defaults.bool(forKey: PreferenceKeys.popupBeforePrayer) }
+        nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.popupBeforePrayer) }
+    }
+
+    /// Seconds before the popup closes itself. 0 means it stays until dismissed.
+    var popupAutoDismissSeconds: Int {
+        get {
+            let value = defaults.integer(forKey: PreferenceKeys.popupAutoDismissSeconds)
+            return min(600, max(0, value))
+        }
+        nonmutating set {
+            defaults.set(min(600, max(0, newValue)), forKey: PreferenceKeys.popupAutoDismissSeconds)
+        }
+    }
+
+    /// How many minutes late a missed alert may still be shown once the screen
+    /// becomes active again. 0 disables catch-up entirely.
+    var catchUpWindowMinutes: Int {
+        get { min(180, max(0, defaults.integer(forKey: PreferenceKeys.catchUpWindowMinutes))) }
+        nonmutating set {
+            defaults.set(min(180, max(0, newValue)), forKey: PreferenceKeys.catchUpWindowMinutes)
+        }
+    }
+
+    var catchUpWindow: TimeInterval { TimeInterval(catchUpWindowMinutes) * 60 }
+
+    /// Alerts already shown, so a relaunch doesn't replay them. Bounded to the
+    /// most recent handful — this is a dedupe guard, not a history.
+    var firedAlertIDs: [String] {
+        get { defaults.stringArray(forKey: PreferenceKeys.firedAlertIDs) ?? [] }
+        nonmutating set { defaults.set(Array(newValue.suffix(40)), forKey: PreferenceKeys.firedAlertIDs) }
     }
 
     var enabledPrayers: Set<Prayer> {

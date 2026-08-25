@@ -302,6 +302,182 @@ func testCacheRoundTrip() {
           "prayer instant survives to the second")
 }
 
+// MARK: - Popup alert scheduling
+
+func testAlertScheduling() {
+    section("PrayerAlertScheduler")
+    let suiteName = "com.syahrul.mySolat.tests.alerts"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        check(false, "test defaults suite available"); return
+    }
+    defaults.removePersistentDomain(forName: suiteName)
+    let prefs = Preferences(defaults: defaults)
+    prefs.preAlertMinutes = 10
+    prefs.enabledPrayers = [.maghrib, .isha]
+
+    let base = Date(timeIntervalSince1970: 1_785_000_000)
+    let maghrib = PrayerEvent(prayer: .maghrib, date: base)
+    let isha = PrayerEvent(prayer: .isha, date: base.addingTimeInterval(4200))
+    // Dhuha is not in enabledPrayers, so it must never produce an alert.
+    let dhuha = PrayerEvent(prayer: .dhuha, date: base.addingTimeInterval(600))
+
+    let alerts = PrayerAlertScheduler.alerts(for: [maghrib, dhuha, isha], prefs: prefs)
+    checkEqual(alerts.count, 4, "two alerts each for the two enabled prayers")
+    check(!alerts.contains { $0.prayer == .dhuha }, "disabled prayer produces no alert")
+    check(alerts.map(\.fireDate) == alerts.map(\.fireDate).sorted(), "alerts are in fire order")
+
+    let pre = alerts.first { $0.prayer == .maghrib && $0.kind == .beforePrayer }
+    check(pre != nil, "pre-alert exists for Maghrib")
+    if let pre {
+        checkEqual(pre.fireDate, base.addingTimeInterval(-600), "pre-alert fires 10 min early")
+        checkEqual(pre.title, "Maghrib in 10 minutes", "pre-alert wording")
+    }
+    let at = alerts.first { $0.prayer == .maghrib && $0.kind == .atPrayerTime }
+    if let at {
+        checkEqual(at.fireDate, base, "on-time alert fires at the prayer")
+        checkEqual(at.title, "Maghrib has entered", "on-time wording")
+    }
+
+    // Nothing is due before its moment.
+    checkEqual(PrayerAlertScheduler.due(from: alerts, now: base.addingTimeInterval(-1200), already: []).count,
+               0, "nothing due 20 min out")
+
+    // The pre-alert becomes due exactly on time.
+    let duePre = PrayerAlertScheduler.due(from: alerts, now: base.addingTimeInterval(-600), already: [])
+    checkEqual(duePre.count, 1, "pre-alert due at its moment")
+    checkEqual(duePre.first?.kind, .beforePrayer, "and it is the pre-alert")
+
+    // Already-shown alerts never repeat.
+    let seen: Set<String> = Set(duePre.map(\.id))
+    checkEqual(PrayerAlertScheduler.due(from: alerts, now: base.addingTimeInterval(-600), already: seen).count,
+               0, "a shown alert does not fire twice")
+
+    // Within the grace window a late alert still fires.
+    let slightlyLate = PrayerAlertScheduler.due(from: alerts, now: base.addingTimeInterval(60), already: seen)
+    check(slightlyLate.contains { $0.kind == .atPrayerTime }, "1 min late still fires")
+
+    // Past the grace window it is dropped, not shown hours later.
+    let veryLate = base.addingTimeInterval(PrayerAlertScheduler.defaultCatchUpWindow + 60)
+    checkEqual(PrayerAlertScheduler.due(from: alerts, now: veryLate, already: seen)
+                 .filter { $0.prayer == .maghrib }.count,
+               0, "stale alert does not fire after the grace period")
+    check(PrayerAlertScheduler.expired(from: alerts, now: veryLate, already: seen)
+            .contains { $0.prayer == .maghrib && $0.kind == .atPrayerTime },
+          "stale alert is reported as expired so it can be marked done")
+
+    // IDs are stable across rebuilds — that is what makes dedupe survive relaunch.
+    let rebuilt = PrayerAlertScheduler.alerts(for: [maghrib, dhuha, isha], prefs: prefs)
+    checkEqual(Set(rebuilt.map(\.id)), Set(alerts.map(\.id)), "alert ids are stable")
+
+    // Same prayer on different days must not collide.
+    let tomorrow = PrayerEvent(prayer: .maghrib, date: base.addingTimeInterval(86400))
+    let tomorrowAlerts = PrayerAlertScheduler.alerts(for: [tomorrow], prefs: prefs)
+    check(Set(tomorrowAlerts.map(\.id)).isDisjoint(with: Set(alerts.map(\.id))),
+          "tomorrow's alerts have distinct ids")
+
+    defaults.removePersistentDomain(forName: suiteName)
+}
+
+func testAlertPreferences() {
+    section("Popup preferences")
+    let suiteName = "com.syahrul.mySolat.tests.popup"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        check(false, "test defaults suite available"); return
+    }
+    defaults.removePersistentDomain(forName: suiteName)
+    let prefs = Preferences(defaults: defaults)
+
+    check(prefs.popupAtPrayerTime, "popup at prayer time defaults on")
+    check(prefs.popupBeforePrayer, "popup before prayer defaults on")
+    checkEqual(prefs.popupAutoDismissSeconds, 30, "auto-dismiss defaults to 30s")
+    checkEqual(prefs.alertSound, .glass, "default sound is Glass")
+
+    prefs.popupAutoDismissSeconds = -5
+    checkEqual(prefs.popupAutoDismissSeconds, 0, "negative clamps to 0 (stay until dismissed)")
+    prefs.popupAutoDismissSeconds = 9999
+    checkEqual(prefs.popupAutoDismissSeconds, 600, "absurd value clamps to 600s")
+
+    prefs.alertSound = .submarine
+    checkEqual(prefs.alertSound, .submarine, "sound round-trips")
+    check(AlertSound.none.systemSoundName == nil, "\"No sound\" maps to silence")
+    check(AlertSound.glass.systemSoundName == "Glass", "sound maps to a system sound name")
+
+    prefs.firedAlertIDs = (1...60).map { "id-\($0)" }
+    checkEqual(prefs.firedAlertIDs.count, 40, "fired-id list is bounded")
+    checkEqual(prefs.firedAlertIDs.last, "id-60", "most recent ids are kept")
+
+    defaults.removePersistentDomain(forName: suiteName)
+}
+
+// MARK: - Catch-up after sleep / lock
+
+func testCatchUpWindow() {
+    section("Missed-alert catch-up")
+    let suiteName = "com.syahrul.mySolat.tests.catchup"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        check(false, "test defaults suite available"); return
+    }
+    defaults.removePersistentDomain(forName: suiteName)
+    let prefs = Preferences(defaults: defaults)
+    prefs.enabledPrayers = [.fajr]
+    prefs.preAlertMinutes = 15
+
+    checkEqual(prefs.catchUpWindowMinutes, 30, "catch-up window defaults to 30 minutes")
+
+    // The scenario from the report: Subuh at 06:00, machine asleep, user returns later.
+    let cal = SolatCalendar.zoneCalendar
+    var c = DateComponents()
+    c.year = 2026; c.month = 8; c.day = 20; c.hour = 6; c.minute = 0
+    c.timeZone = SolatCalendar.zoneTimeZone
+    let subuh = cal.date(from: c)!
+    let alerts = PrayerAlertScheduler.alerts(for: [PrayerEvent(prayer: .fajr, date: subuh)], prefs: prefs)
+
+    func at(_ hour: Int, _ minute: Int) -> Date {
+        var c2 = c; c2.hour = hour; c2.minute = minute
+        return cal.date(from: c2)!
+    }
+    let window = prefs.catchUpWindow
+
+    // Comes back 20 minutes late — still worth showing, and it must be the
+    // "has entered" alert, not the stale 15-minutes-before one.
+    let at620 = PrayerAlertScheduler.mostRelevant(from: alerts, now: at(6, 20), already: [], window: window)
+    check(at620 != nil, "06:20 — a missed alert is still surfaced")
+    checkEqual(at620?.kind, .atPrayerTime, "06:20 — shows \"has entered\", not the pre-alert")
+
+    // Exactly on the boundary still counts.
+    let at630 = PrayerAlertScheduler.mostRelevant(from: alerts, now: at(6, 30), already: [], window: window)
+    check(at630 != nil, "06:30 — exactly 30 minutes late still shows")
+
+    // One minute past the boundary: nothing, and it is retired.
+    let at631 = PrayerAlertScheduler.mostRelevant(from: alerts, now: at(6, 31), already: [], window: window)
+    check(at631 == nil, "06:31 — past the window, nothing is shown")
+    check(PrayerAlertScheduler.expired(from: alerts, now: at(6, 31), already: [], window: window)
+            .contains { $0.kind == .atPrayerTime },
+          "06:31 — the missed alert is retired so it cannot resurface")
+
+    // Hours later, definitely nothing.
+    check(PrayerAlertScheduler.mostRelevant(from: alerts, now: at(12, 0), already: [], window: window) == nil,
+          "noon — a morning prayer never pops up")
+
+    // A zero window disables catch-up: only alerts firing right now appear.
+    check(PrayerAlertScheduler.mostRelevant(from: alerts, now: at(6, 5), already: [], window: 0) == nil,
+          "window 0 — a 5-minute-old alert is not replayed")
+    check(PrayerAlertScheduler.mostRelevant(from: alerts, now: subuh, already: [], window: 0) != nil,
+          "window 0 — an alert due this instant still fires")
+
+    // Before the prayer, the pre-alert is the relevant one.
+    let at550 = PrayerAlertScheduler.mostRelevant(from: alerts, now: at(5, 50), already: [], window: window)
+    checkEqual(at550?.kind, .beforePrayer, "05:50 — the pre-alert is what shows")
+
+    // Window is clamped to something sane.
+    prefs.catchUpWindowMinutes = -10
+    checkEqual(prefs.catchUpWindowMinutes, 0, "negative window clamps to 0")
+    prefs.catchUpWindowMinutes = 9999
+    checkEqual(prefs.catchUpWindowMinutes, 180, "huge window clamps to 180")
+
+    defaults.removePersistentDomain(forName: suiteName)
+}
+
 // MARK: - Zone/cache reconciliation
 
 func testStoreIgnoresForeignZoneCache() async {
@@ -422,6 +598,9 @@ struct TestRunner {
         testFormatting()
         testPreferences()
         testCacheRoundTrip()
+        testAlertScheduling()
+        testAlertPreferences()
+        testCatchUpWindow()
         await testStoreIgnoresForeignZoneCache()
         testZoneCatalog()
         testWidgetDataPath()

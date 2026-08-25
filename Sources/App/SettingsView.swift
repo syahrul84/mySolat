@@ -212,6 +212,11 @@ private struct NotificationSettings: View {
     @State private var preAlertOn = true
     @State private var preAlertMinutes = 15
     @State private var soundOn = true
+    @State private var sound: AlertSound = .glass
+    @State private var popupAtTime = true
+    @State private var popupBefore = true
+    @State private var autoDismiss = 30
+    @State private var catchUp = 30
     @State private var enabled: Set<Prayer> = []
 
     var body: some View {
@@ -221,15 +226,131 @@ private struct NotificationSettings: View {
                     permissionBanner
                 }
 
-                GroupBox("When to alert") {
+                GroupBox("On-screen popup") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("A panel that appears over your work and stays until you dismiss it. Harder to miss than a notification banner, which hides itself after a few seconds.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Toggle("Show a popup when the prayer time enters", isOn: $popupAtTime)
+                            .onValueChange(of: popupAtTime) { value in
+                                state.prefs.popupAtPrayerTime = value
+                                commit()
+                            }
+
+                        Toggle("Show a popup before the prayer time", isOn: $popupBefore)
+                            .onValueChange(of: popupBefore) { value in
+                                state.prefs.popupBeforePrayer = value
+                                commit()
+                            }
+
+                        Divider()
+
+                        HStack(spacing: 8) {
+                            Text("Close it automatically after")
+                            Stepper(value: $autoDismiss, in: 0...300, step: 5) {
+                                Text(autoDismiss == 0 ? "never" : "\(autoDismiss)s")
+                                    .monospacedDigit()
+                                    .frame(minWidth: 54, alignment: .leading)
+                            }
+                            .onValueChange(of: autoDismiss) { value in
+                                state.prefs.popupAutoDismissSeconds = value
+                                commit()
+                            }
+                            Spacer()
+                        }
+                        Text(autoDismiss == 0
+                             ? "The popup will wait until you dismiss it."
+                             : "Set to 0 to make the popup wait until you dismiss it.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+
+                        Divider()
+
+                        Text("While the Mac is asleep, locked, or showing a screen saver, popups are held back — no popup or sound fires at a screen you can't see.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(spacing: 8) {
+                            Text("When I come back, show alerts up to")
+                            Stepper(value: $catchUp, in: 0...180, step: 5) {
+                                Text(catchUp == 0 ? "off" : "\(catchUp) min")
+                                    .monospacedDigit()
+                                    .frame(minWidth: 58, alignment: .leading)
+                            }
+                            .onValueChange(of: catchUp) { value in
+                                state.prefs.catchUpWindowMinutes = value
+                                commit()
+                            }
+                            Text("late")
+                            Spacer()
+                        }
+                        Text(catchUp == 0
+                             ? "Missed alerts are skipped entirely."
+                             : "Subuh at 6:00 will still appear if you unlock at 6:\(String(format: "%02d", min(59, catchUp))) — but not later.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(spacing: 8) {
+                            Button("Preview \"before\" popup") {
+                                state.previewAlert(kind: .beforePrayer)
+                            }
+                            .controlSize(.small)
+                            Button("Preview \"time entered\" popup") {
+                                state.previewAlert(kind: .atPrayerTime)
+                            }
+                            .controlSize(.small)
+                            Spacer()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                }
+
+                GroupBox("Sound") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("Play a sound with the alert", isOn: $soundOn)
+                            .onValueChange(of: soundOn) { value in
+                                state.prefs.notificationSoundEnabled = value
+                                commit()
+                            }
+
+                        HStack(spacing: 8) {
+                            Picker("Sound", selection: $sound) {
+                                ForEach(AlertSound.allCases) { option in
+                                    Text(option.displayName).tag(option)
+                                }
+                            }
+                            .frame(maxWidth: 220)
+                            .onValueChange(of: sound) { value in
+                                state.prefs.alertSound = value
+                                state.alerts.playSound(prefs: state.prefs)
+                                commit()
+                            }
+                            Button("Play") { state.alerts.playSound(prefs: state.prefs) }
+                                .controlSize(.small)
+                            Spacer()
+                        }
+                        .disabled(!soundOn)
+
+                        Text("mySolat has no adzan audio — these are the standard macOS sounds.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                }
+
+                GroupBox("Notifications") {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle("Notify when the prayer time enters", isOn: $notifyAtTime)
                             .onValueChange(of: notifyAtTime) { value in
                                 state.prefs.notifyAtPrayerTime = value
                                 commit()
                             }
-
-                        Divider()
 
                         Toggle("Notify me before the prayer time", isOn: $preAlertOn)
                             .onValueChange(of: preAlertOn) { value in
@@ -251,23 +372,11 @@ private struct NotificationSettings: View {
                             Text("before")
                             Spacer()
                         }
-                        .disabled(!preAlertOn)
-                        .foregroundStyle(preAlertOn ? .primary : .secondary)
 
-                        Text("A heads-up so you have time to prepare — wudhu, wrap up a meeting, or head to the masjid.")
+                        Text("The warning time above applies to both the notification and the popup — a heads-up for wudhu, wrapping up a meeting, or heading to the masjid.")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-
-                        Divider()
-
-                        Toggle("Play a sound", isOn: $soundOn)
-                            .onValueChange(of: soundOn) { value in
-                                state.prefs.notificationSoundEnabled = value
-                                commit()
-                            }
-                        Text("mySolat has no adzan audio — it uses the standard macOS notification sound.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)
@@ -288,6 +397,10 @@ private struct NotificationSettings: View {
                                 }
                             }
                         }
+                        Text("Applies to popups and notifications alike.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 2)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)
@@ -301,7 +414,7 @@ private struct NotificationSettings: View {
                     Text("\(state.scheduledAlertCount) alerts queued")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                        .help("macOS allows 64 pending notifications, so mySolat schedules a rolling window and refreshes it hourly. Your prayer times stay cached 30+ days regardless.")
+                        .help("macOS allows 64 pending notifications, so mySolat schedules a rolling window and refreshes it hourly. Popups are raised by the app itself and aren't subject to that limit.")
                 }
             }
             .padding(2)
@@ -314,7 +427,7 @@ private struct NotificationSettings: View {
             Image(systemName: "bell.slash.fill").foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Notifications are turned off").font(.system(size: 12, weight: .medium))
-                Text("mySolat can't alert you until macOS allows it.")
+                Text("The on-screen popup still works — it doesn't need permission.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
@@ -342,6 +455,11 @@ private struct NotificationSettings: View {
         preAlertOn = state.prefs.preAlertEnabled
         preAlertMinutes = state.prefs.preAlertMinutes
         soundOn = state.prefs.notificationSoundEnabled
+        sound = state.prefs.alertSound
+        popupAtTime = state.prefs.popupAtPrayerTime
+        popupBefore = state.prefs.popupBeforePrayer
+        autoDismiss = state.prefs.popupAutoDismissSeconds
+        catchUp = state.prefs.catchUpWindowMinutes
         enabled = state.prefs.enabledPrayers
     }
 
