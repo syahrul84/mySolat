@@ -297,7 +297,7 @@ final class AppState: ObservableObject {
             prefs: prefs,
             zoneDescription: ZoneCatalog.shared.describe(code: prefs.zoneCode)
         )
-        scheduledAlertCount = scheduler.lastScheduledCount
+        scheduledAlertCount = scheduler.pendingCount
         await rebuildAlerts()
     }
 

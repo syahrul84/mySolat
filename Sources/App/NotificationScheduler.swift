@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import UserNotifications
 
 /// Schedules the "prayer time has entered" and "prayer in N minutes" alerts.
@@ -16,9 +17,18 @@ final class NotificationScheduler {
     private static let requestBudget = 58
 
     private let center = UNUserNotificationCenter.current()
+    private static let log = Logger(subsystem: "com.syahrul.mySolat", category: "notifications")
+
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var lastScheduledCount = 0
     private(set) var lastScheduledThrough: Date?
+
+    /// What the system actually holds, as opposed to what we last scheduled.
+    ///
+    /// These differ, and the difference is the whole problem: `lastScheduledCount`
+    /// is 0 whenever scheduling is skipped, which reads as "nothing is queued" even
+    /// if the system is still holding requests from an earlier run.
+    private(set) var pendingCount = 0
 
     // MARK: Authorization
 
@@ -65,11 +75,19 @@ final class NotificationScheduler {
                     prefs: Preferences,
                     zoneDescription: String,
                     now: Date = Date()) async {
+        // What the system was holding before we touch it. At launch this reveals
+        // requests left over from a previous run — the ones that keep firing after
+        // the user has switched notifications off.
+        await refreshPendingCount(context: "before clearing")
+
         center.removeAllPendingNotificationRequests()
         lastScheduledCount = 0
         lastScheduledThrough = nil
 
-        guard isAuthorized else { return }
+        guard isAuthorized else {
+            Self.log.info("reschedule: not authorised")
+            return
+        }
 
         let enabled = prefs.enabledPrayers
         let wantsNotifications = !enabled.isEmpty
@@ -85,7 +103,10 @@ final class NotificationScheduler {
             center.removeAllDeliveredNotifications()
         }
 
-        guard wantsNotifications else { return }
+        guard wantsNotifications else {
+            await refreshPendingCount(context: "notifications disabled")
+            return
+        }
 
         var requests: [UNNotificationRequest] = []
 
@@ -123,6 +144,20 @@ final class NotificationScheduler {
 
         lastScheduledCount = requests.count
         lastScheduledThrough = requests.compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() }.max()
+        await refreshPendingCount(context: "after scheduling \(requests.count)")
+    }
+
+    /// Reads back what the system is actually holding, and logs it.
+    @discardableResult
+    func refreshPendingCount(context: String) async -> [UNNotificationRequest] {
+        let pending = await center.pendingNotificationRequests()
+        pendingCount = pending.count
+        Self.log.info("pending=\(pending.count, privacy: .public) (\(context, privacy: .public))")
+        for request in pending.prefix(6) {
+            let fire = (request.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate()
+            Self.log.info("  \(request.identifier, privacy: .public) fires=\(fire?.description ?? "?", privacy: .public)")
+        }
+        return pending
     }
 
     func cancelAll() {

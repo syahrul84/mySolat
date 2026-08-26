@@ -411,10 +411,10 @@ private struct NotificationSettings: View {
                         Task { await state.sendTestNotification() }
                     }
                     Spacer()
-                    Text("\(state.scheduledAlertCount) alerts queued")
+                    Text("\(state.scheduledAlertCount) notifications queued")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                        .help("macOS allows 64 pending notifications, so mySolat schedules a rolling window and refreshes it hourly. Popups are raised by the app itself and aren't subject to that limit.")
+                        .help("Notifications the system is currently holding for mySolat — not what was last scheduled. macOS allows 64, so mySolat keeps a rolling window and refreshes it hourly. Popups are raised by the app itself and aren't subject to that limit.")
                 }
             }
             .padding(2)
