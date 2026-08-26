@@ -53,7 +53,7 @@ struct SettingsView: View {
                 case .location: LocationSettings()
                 case .alerts: NotificationSettings()
                 case .appearance: AppearanceSettings()
-                case .updates: UpdateSettings()
+                case .updates: UpdateSettings(updater: state.updater)
                 case .about: AboutSettings()
                 }
             }
@@ -561,6 +561,15 @@ private struct AppearanceSettings: View {
 
 private struct UpdateSettings: View {
     @EnvironmentObject private var state: AppState
+
+    /// Observed directly rather than reached through `state.updater`.
+    ///
+    /// `GitHubUpdater` is its own `ObservableObject`, and SwiftUI does not
+    /// propagate a nested observable's changes to a view observing the parent —
+    /// so download progress and the "ready to restart" state were published but
+    /// never redrawn, making Update Now look like it did nothing.
+    @ObservedObject var updater: GitHubUpdater
+
     @State private var autoCheck = true
 
     private static let relativeFormatter = RelativeDateTimeFormatter()
@@ -575,10 +584,10 @@ private struct UpdateSettings: View {
                         }
 
                     HStack {
-                        Button("Check Now") { state.updater.checkForUpdates() }
-                            .disabled(state.updater.phase.isBusy)
+                        Button("Check Now") { updater.checkForUpdates() }
+                            .disabled(updater.phase.isBusy)
                         Spacer()
-                        if let last = state.updater.lastChecked {
+                        if let last = updater.lastChecked {
                             Text("Checked \(Self.relativeFormatter.localizedString(for: last, relativeTo: Date()))")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.tertiary)
@@ -605,7 +614,7 @@ private struct UpdateSettings: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("All Releases") { state.updater.openReleasePage() }
+                    Button("All Releases") { updater.openReleasePage() }
                         .controlSize(.small)
                 }
                 .padding(6)
@@ -618,7 +627,7 @@ private struct UpdateSettings: View {
 
     @ViewBuilder
     private var statusLine: some View {
-        switch state.updater.phase {
+        switch updater.phase {
         case .idle:
             EmptyView()
 
@@ -640,10 +649,10 @@ private struct UpdateSettings: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.tint)
                     Spacer()
-                    Button("Release Notes") { state.updater.openReleasePage() }
+                    Button("Release Notes") { updater.openReleasePage() }
                         .buttonStyle(.link)
                         .font(.system(size: 10))
-                    Button("Update Now") { state.updater.downloadAndInstall() }
+                    Button("Update Now") { updater.downloadAndInstall() }
                         .controlSize(.small)
                         .buttonStyle(.borderedProminent)
                 }
@@ -686,7 +695,7 @@ private struct UpdateSettings: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.green)
                 Spacer()
-                Button("Restart mySolat") { state.updater.relaunchAndFinishUpdate() }
+                Button("Restart mySolat") { updater.relaunchAndFinishUpdate() }
                     .controlSize(.small)
                     .buttonStyle(.borderedProminent)
             }
@@ -698,9 +707,9 @@ private struct UpdateSettings: View {
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    Button("Download Manually") { state.updater.openReleasePage() }
+                    Button("Download Manually") { updater.openReleasePage() }
                         .controlSize(.small)
-                    Button("Dismiss") { state.updater.dismissStatus() }
+                    Button("Dismiss") { updater.dismissStatus() }
                         .controlSize(.small)
                 }
             }
