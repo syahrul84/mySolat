@@ -55,8 +55,20 @@ app: $(APP_BUNDLE)
 	@lipo -archs $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME) | sed 's/^/  app:    /'
 	@lipo -archs $(APPEX)/Contents/MacOS/$(WIDGET_NAME) | sed 's/^/  widget: /'
 
-$(APP_BUNDLE): $(SHARED_SRC) $(APP_SRC) $(WIDGET_SRC) Resources/App-Info.plist Resources/Widget-Info.plist Resources/zones.json $(BUILD_DIR)/.mode-universal
+$(APP_BUNDLE): $(SHARED_SRC) $(APP_SRC) $(WIDGET_SRC) Resources/App-Info.plist Resources/Widget-Info.plist Resources/zones.json $(BUILD_DIR)/.mode-universal $(BUILD_DIR)/.version
 	@$(MAKE) --no-print-directory bundle ARCH_MODE=universal
+
+# The version is stamped into Info.plist at assembly time, but it isn't a file,
+# so changing VERSION alone left an up-to-date bundle in place — `make` would
+# then report the new version while the bundle still carried the old one. This
+# records it so a version change invalidates the build like any other input.
+.PHONY: force
+force:
+
+$(BUILD_DIR)/.version: force
+	@mkdir -p $(BUILD_DIR)
+	@printf '%s' "$(VERSION)-$(BUILD_NUMBER)" | cmp -s - $@ 2>/dev/null || \
+	  printf '%s' "$(VERSION)-$(BUILD_NUMBER)" > $@
 
 # Both modes write to the same bundle path, so a mode marker forces a rebuild when
 # switching between them — otherwise `make` after `make native` would leave the
@@ -66,7 +78,7 @@ $(BUILD_DIR)/.mode-universal:
 	@rm -f $(BUILD_DIR)/.mode-native
 	@touch $@
 
-native:
+native: $(BUILD_DIR)/.version
 	@mkdir -p $(BUILD_DIR)
 	@rm -f $(BUILD_DIR)/.mode-universal
 	@touch $(BUILD_DIR)/.mode-native
