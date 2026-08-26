@@ -72,7 +72,20 @@ final class NotificationScheduler {
         guard isAuthorized else { return }
 
         let enabled = prefs.enabledPrayers
-        guard !enabled.isEmpty, prefs.notifyAtPrayerTime || prefs.preAlertEnabled else { return }
+        let wantsNotifications = !enabled.isEmpty
+            && (prefs.notifyAtPrayerTime || prefs.preAlertEnabled)
+
+        // Removing pending requests only stops *future* notifications. Ones already
+        // delivered stay in Notification Center until dismissed, so switching
+        // notifications off left the old ones sitting there — looking exactly like
+        // the setting hadn't taken effect.
+        if wantsNotifications {
+            await pruneDeliveredNotifications(olderThan: prefs.catchUpWindow, now: now)
+        } else {
+            center.removeAllDeliveredNotifications()
+        }
+
+        guard wantsNotifications else { return }
 
         var requests: [UNNotificationRequest] = []
 
@@ -114,8 +127,26 @@ final class NotificationScheduler {
 
     func cancelAll() {
         center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
         lastScheduledCount = 0
         lastScheduledThrough = nil
+    }
+
+    /// Clears delivered prayer notifications whose moment has well passed.
+    ///
+    /// Without this, every prayer of every day accumulates in Notification Center
+    /// until the user clears it by hand. Only this app's notifications are
+    /// affected, and only prayer ones: an update notice carries no `prayerDate`
+    /// and is left alone.
+    func pruneDeliveredNotifications(olderThan window: TimeInterval, now: Date) async {
+        let delivered = await center.deliveredNotifications()
+        let stale = delivered.filter { notification in
+            guard let stamp = notification.request.content.userInfo["prayerDate"] as? TimeInterval
+            else { return false }
+            return now.timeIntervalSince(Date(timeIntervalSince1970: stamp)) > window
+        }
+        guard !stale.isEmpty else { return }
+        center.removeDeliveredNotifications(withIdentifiers: stale.map(\.request.identifier))
     }
 
     /// Posts an immediate test alert so the user can confirm the setup works.
@@ -176,6 +207,7 @@ final class NotificationScheduler {
         content.userInfo = [
             "prayer": event.prayer.rawValue,
             "prayerDate": event.date.timeIntervalSince1970,
+            "kind": kind.suffix,
         ]
 
         // Absolute one-shot trigger: year-qualified components in the dataset's
@@ -198,10 +230,42 @@ final class NotificationScheduler {
     }
 }
 
-/// Keeps banners visible even while mySolat is the active app.
-final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+/// Decides how a notification is presented — and whether it is presented at all.
+///
+/// This is the last gate before a banner reaches the screen, and the only one
+/// that cannot be outrun. Clearing pending requests stops *future* notifications,
+/// but a request scheduled moments before a setting changed, or left behind by an
+/// older build, would still fire. Re-checking the preference here means a prayer
+/// notification the user has switched off is never shown, whatever produced it.
+@MainActor
+final class NotificationDelegate: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
+    private let prefs: Preferences
+
+    init(prefs: Preferences = Preferences()) {
+        self.prefs = prefs
+    }
+
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .list]
+        let info = notification.request.content.userInfo
+
+        // Not a prayer notification (an update notice, or the test alert): leave it.
+        guard let prayerRaw = info["prayer"] as? String,
+              let prayer = Prayer(rawValue: prayerRaw)
+        else { return [.banner, .sound, .list] }
+
+        // Muted prayer, or the whole category switched off.
+        guard prefs.enabledPrayers.contains(prayer) else { return [] }
+
+        let isPreAlert = (info["kind"] as? String) == "pre"
+        let wanted = isPreAlert ? prefs.preAlertEnabled : prefs.notifyAtPrayerTime
+        guard wanted else {
+            // Drop it from Notification Center too, so a suppressed alert doesn't
+            // linger in the history looking like the setting never applied.
+            center.removeDeliveredNotifications(withIdentifiers: [notification.request.identifier])
+            return []
+        }
+
+        return prefs.notificationSoundEnabled ? [.banner, .sound, .list] : [.banner, .list]
     }
 }

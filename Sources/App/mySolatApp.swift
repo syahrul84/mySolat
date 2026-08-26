@@ -60,11 +60,16 @@ private struct MenuBarLabel: View {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let notificationDelegate = NotificationDelegate()
+    // Built lazily on the main actor: NotificationDelegate reads preferences and
+    // is main-actor isolated, so it can't be a default stored-property value.
+    private var notificationDelegate: NotificationDelegate?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        UNUserNotificationCenter.current().delegate = notificationDelegate
+        let delegate = NotificationDelegate()
+        notificationDelegate = delegate
+        UNUserNotificationCenter.current().delegate = delegate
         // Agent app: no Dock icon, no app switcher entry.
         NSApp.setActivationPolicy(.accessory)
     }

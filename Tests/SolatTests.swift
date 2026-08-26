@@ -409,6 +409,67 @@ func testAlertPreferences() {
     defaults.removePersistentDomain(forName: suiteName)
 }
 
+// MARK: - Notification suppression
+
+/// Mirrors the decision `NotificationDelegate.willPresent` makes, so the rule is
+/// covered by the plain test binary (the delegate itself needs UserNotifications
+/// and a running app).
+func shouldPresentNotification(prayerRaw: String?, kind: String?, prefs: Preferences) -> Bool {
+    guard let prayerRaw, let prayer = Prayer(rawValue: prayerRaw) else { return true }
+    guard prefs.enabledPrayers.contains(prayer) else { return false }
+    return (kind == "pre") ? prefs.preAlertEnabled : prefs.notifyAtPrayerTime
+}
+
+func testNotificationSuppression() {
+    section("Notification presentation gate")
+    let suiteName = "com.syahrul.mySolat.tests.suppress"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        check(false, "test defaults suite available"); return
+    }
+    defaults.removePersistentDomain(forName: suiteName)
+    let prefs = Preferences(defaults: defaults)
+    prefs.enabledPrayers = [.fajr, .dhuhr, .asr, .maghrib, .isha]
+
+    // Both on: everything shows.
+    prefs.notifyAtPrayerTime = true
+    prefs.preAlertEnabled = true
+    check(shouldPresentNotification(prayerRaw: "asr", kind: "at", prefs: prefs), "on-time shows when enabled")
+    check(shouldPresentNotification(prayerRaw: "asr", kind: "pre", prefs: prefs), "pre-alert shows when enabled")
+
+    // The reported case: both switched off, yet a request still fires.
+    prefs.notifyAtPrayerTime = false
+    prefs.preAlertEnabled = false
+    check(!shouldPresentNotification(prayerRaw: "asr", kind: "at", prefs: prefs),
+          "on-time is suppressed once switched off")
+    check(!shouldPresentNotification(prayerRaw: "dhuhr", kind: "pre", prefs: prefs),
+          "pre-alert is suppressed once switched off")
+
+    // Each kind is independent.
+    prefs.notifyAtPrayerTime = true
+    prefs.preAlertEnabled = false
+    check(shouldPresentNotification(prayerRaw: "maghrib", kind: "at", prefs: prefs),
+          "on-time still shows with only the pre-alert off")
+    check(!shouldPresentNotification(prayerRaw: "maghrib", kind: "pre", prefs: prefs),
+          "pre-alert stays suppressed")
+
+    // A muted prayer is suppressed whatever the kind toggles say.
+    prefs.preAlertEnabled = true
+    prefs.enabledPrayers = [.maghrib]
+    check(!shouldPresentNotification(prayerRaw: "asr", kind: "at", prefs: prefs),
+          "a muted prayer is suppressed")
+    check(shouldPresentNotification(prayerRaw: "maghrib", kind: "at", prefs: prefs),
+          "an enabled prayer still shows")
+
+    // Non-prayer notifications are never touched by these toggles.
+    prefs.notifyAtPrayerTime = false
+    prefs.preAlertEnabled = false
+    prefs.enabledPrayers = []
+    check(shouldPresentNotification(prayerRaw: nil, kind: nil, prefs: prefs),
+          "an update notice is not affected by prayer toggles")
+
+    defaults.removePersistentDomain(forName: suiteName)
+}
+
 // MARK: - Catch-up after sleep / lock
 
 func testCatchUpWindow() {
@@ -601,6 +662,7 @@ struct TestRunner {
         testAlertScheduling()
         testAlertPreferences()
         testCatchUpWindow()
+        testNotificationSuppression()
         await testStoreIgnoresForeignZoneCache()
         testZoneCatalog()
         testWidgetDataPath()
