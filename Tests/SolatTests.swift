@@ -46,6 +46,16 @@ func testVersionComparison() {
     check(!AppVersion.isNewer("1.0.0", than: "1.0.1"), "older is not newer")
     check(!AppVersion.isNewer("1.0.0-beta.1", than: "1.0.0"), "pre-release core equal is not newer")
     checkEqual(AppVersion.compare("1.0.0", "1.0.0"), .orderedSame, "identical compares same")
+
+    // Four-component versions aren't used for releases, but the comparator has to
+    // handle them: the updater offers strictly newer versions only, so getting
+    // this wrong would silently strand everyone on the older build.
+    check(AppVersion.isNewer("1.0.4.1", than: "1.0.4"), "1.0.4.1 is newer than 1.0.4")
+    check(AppVersion.isNewer("1.0.4.2", than: "1.0.4.1"), "1.0.4.2 is newer than 1.0.4.1")
+    check(!AppVersion.isNewer("1.0.4", than: "1.0.4.1"), "1.0.4 is not newer than 1.0.4.1")
+    check(AppVersion.isNewer("1.0.5", than: "1.0.4.1"), "1.0.5 is newer than 1.0.4.1")
+    check(!AppVersion.isNewer("1.0.4.1", than: "1.0.4.1"), "equal four-part versions tie")
+    check(AppVersion.isNewer("v1.0.4.1", than: "1.0.4"), "tagged form compares too")
 }
 
 // MARK: - Month coverage planning
@@ -402,11 +412,63 @@ func testAlertPreferences() {
     check(AlertSound.none.systemSoundName == nil, "\"No sound\" maps to silence")
     check(AlertSound.glass.systemSoundName == "Glass", "sound maps to a system sound name")
 
+    // The store keeps what it is given, up to a generous ceiling. Trimming used
+    // to happen here — `suffix(40)` on a sorted list — which silently discarded
+    // whole prayers rather than old entries. Pruning is now the caller's job and
+    // is done by date; see testFiredIDPruning.
     prefs.firedAlertIDs = (1...60).map { "id-\($0)" }
-    checkEqual(prefs.firedAlertIDs.count, 40, "fired-id list is bounded")
-    checkEqual(prefs.firedAlertIDs.last, "id-60", "most recent ids are kept")
+    checkEqual(prefs.firedAlertIDs.count, 60, "the store no longer trims live ids")
+    check(prefs.firedAlertIDs.contains("id-1"), "the first id survives a round trip")
+    check(prefs.firedAlertIDs.contains("id-60"), "the last id survives a round trip")
 
     defaults.removePersistentDomain(forName: suiteName)
+}
+
+// MARK: - Fired-alert bookkeeping
+
+func testFiredIDPruning() {
+    section("Fired-alert id retention")
+    let cal = SolatCalendar.zoneCalendar
+    var c = DateComponents()
+    c.year = 2026; c.month = 9; c.day = 3; c.hour = 12
+    c.timeZone = SolatCalendar.zoneTimeZone
+    let now = cal.date(from: c)!
+
+    func id(_ prayer: String, _ stamp: String, _ kind: String) -> String { "\(prayer).\(stamp).\(kind)" }
+
+    // A week of alerts across every prayer, as accumulates in real use.
+    var ids = Set<String>()
+    for day in 28...31 { for p in ["asr","dhuhr","fajr","isha","maghrib"] {
+        ids.insert(id(p, "202608\(day)", "atPrayerTime")); ids.insert(id(p, "202608\(day)", "beforePrayer")) } }
+    for day in 1...3 { for p in ["asr","dhuhr","fajr","isha","maghrib"] {
+        ids.insert(id(p, "2026090\(day)", "atPrayerTime")); ids.insert(id(p, "2026090\(day)", "beforePrayer")) } }
+    checkEqual(ids.count, 70, "seven days of alerts accumulated")
+
+    let kept = PrayerAlertScheduler.pruneFiredIDs(ids, now: now, days: 3)
+
+    // The whole point: today's ids survive, for every prayer.
+    for p in ["asr","dhuhr","fajr","isha","maghrib"] {
+        check(kept.contains(id(p, "20260903", "atPrayerTime")), "today's \(p) id is kept")
+    }
+    check(kept.contains(id("asr", "20260903", "beforePrayer")), "today's asr pre-alert is kept")
+
+    // Regression: a count cap on a sorted list dropped whole prayers, because ids
+    // sort by prayer name — asr always lost, and its alert replayed every second.
+    let sortedCap = Set(ids.sorted().suffix(40))
+    check(!sortedCap.contains(id("asr", "20260903", "atPrayerTime")),
+          "the old sorted-suffix cap discarded today's asr id (the bug)")
+    check(kept.contains(id("asr", "20260903", "atPrayerTime")),
+          "date pruning keeps it")
+
+    // Old ids go, and the set stays bounded.
+    check(!kept.contains(id("fajr", "20260828", "atPrayerTime")), "a six-day-old id is dropped")
+    check(kept.count <= 50, "pruned set stays small (\(kept.count))")
+    check(kept.allSatisfy { $0.split(separator: ".")[1] >= "20260831" }, "nothing older than the cutoff survives")
+
+    // Unparseable ids are kept rather than risking a repeat alert.
+    let odd: Set<String> = ["not-an-id", "a.b", "prayer.notadate.kind"]
+    checkEqual(PrayerAlertScheduler.pruneFiredIDs(odd, now: now, days: 3), odd,
+               "ids of unknown shape are preserved")
 }
 
 // MARK: - Notification suppression
@@ -663,6 +725,7 @@ struct TestRunner {
         testAlertPreferences()
         testCatchUpWindow()
         testNotificationSuppression()
+        testFiredIDPruning()
         await testStoreIgnoresForeignZoneCache()
         testZoneCatalog()
         testWidgetDataPath()

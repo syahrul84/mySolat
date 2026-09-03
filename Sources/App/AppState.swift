@@ -197,9 +197,13 @@ final class AppState: ObservableObject {
 
     private func markFired(_ list: [PrayerAlert]) {
         for alert in list { firedAlertIDs.insert(alert.id) }
-        // Persisted so a relaunch doesn't replay today's alerts.
+
+        // Prune by day, then persist. The in-memory set stays authoritative: it
+        // used to be replaced by whatever came back out of storage, so an id that
+        // failed to survive the round trip was silently forgotten and its alert
+        // fired again on the very next tick — a popup every second.
+        firedAlertIDs = PrayerAlertScheduler.pruneFiredIDs(firedAlertIDs)
         prefs.firedAlertIDs = Array(firedAlertIDs).sorted()
-        firedAlertIDs = Set(prefs.firedAlertIDs)
     }
 
     /// Rebuilds the popup schedule from the cache and current settings.

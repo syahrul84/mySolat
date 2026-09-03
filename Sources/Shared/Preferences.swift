@@ -177,11 +177,15 @@ struct Preferences {
 
     var catchUpWindow: TimeInterval { TimeInterval(catchUpWindowMinutes) * 60 }
 
-    /// Alerts already shown, so a relaunch doesn't replay them. Bounded to the
-    /// most recent handful — this is a dedupe guard, not a history.
+    /// Alerts already shown, so a relaunch doesn't replay them.
+    ///
+    /// Callers prune this by day before storing. There is deliberately no count
+    /// cap here: the previous `suffix(40)` trimmed a *sorted* list, and because
+    /// ids sort by prayer name it removed every `asr` entry rather than the
+    /// oldest ones. The generous ceiling below only guards runaway growth.
     var firedAlertIDs: [String] {
         get { defaults.stringArray(forKey: PreferenceKeys.firedAlertIDs) ?? [] }
-        nonmutating set { defaults.set(Array(newValue.suffix(40)), forKey: PreferenceKeys.firedAlertIDs) }
+        nonmutating set { defaults.set(Array(newValue.suffix(500)), forKey: PreferenceKeys.firedAlertIDs) }
     }
 
     var enabledPrayers: Set<Prayer> {

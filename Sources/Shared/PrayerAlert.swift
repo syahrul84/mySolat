@@ -128,6 +128,34 @@ enum PrayerAlertScheduler {
         due(from: alerts, now: now, already: already, window: window).last
     }
 
+    /// How many days of fired-alert ids to keep.
+    ///
+    /// Ids encode their day, so anything older than the alerts we still evaluate
+    /// can never match again. Three days is comfortably beyond the longest
+    /// catch-up window.
+    static let firedIDRetentionDays = 3
+
+    /// Drops fired-alert ids for days already behind us.
+    ///
+    /// This must prune by *date*, never by a count: ids sort by prayer name
+    /// first, so trimming a sorted list drops whole prayers — `asr` before
+    /// everything else — rather than the oldest entries.
+    static func pruneFiredIDs(_ ids: Set<String>,
+                              now: Date = Date(),
+                              days: Int = firedIDRetentionDays) -> Set<String> {
+        let cal = SolatCalendar.zoneCalendar
+        guard let cutoff = cal.date(byAdding: .day, value: -days, to: now) else { return ids }
+        let cutoffStamp = SolatCalendar.dayFormatter("yyyyMMdd").string(from: cutoff)
+        return ids.filter { id in
+            let parts = id.split(separator: ".")
+            // Unrecognised shapes are kept: better a stale id than a repeat alert.
+            guard parts.count >= 2 else { return true }
+            let stamp = String(parts[1])
+            guard stamp.count == 8, stamp.allSatisfy(\.isNumber) else { return true }
+            return stamp >= cutoffStamp
+        }
+    }
+
     /// Alerts whose moment passed while the app wasn't watching and which are now
     /// too stale to show. Marked as fired so they don't surface later.
     static func expired(from alerts: [PrayerAlert],
