@@ -30,6 +30,10 @@ enum PreferenceKeys {
     static let use24HourClock = "use24HourClock"
     static let menuBarStyle = "menuBarStyle"
     static let showSecondaryMarkers = "showSecondaryMarkers"
+    static let widgetShowLocation = "widgetShowLocation"
+    static let widgetShowCountdown = "widgetShowCountdown"
+    static let widgetShowDate = "widgetShowDate"
+    static let lastCoverageWarning = "lastCoverageWarning"
     static let notifyAtPrayerTime = "notifyAtPrayerTime"
     static let preAlertMinutes = "preAlertMinutes"
     static let preAlertEnabled = "preAlertEnabled"
@@ -61,6 +65,9 @@ struct Preferences {
             PreferenceKeys.use24HourClock: false,
             PreferenceKeys.menuBarStyle: MenuBarStyle.nameAndTime.rawValue,
             PreferenceKeys.showSecondaryMarkers: true,
+            PreferenceKeys.widgetShowLocation: true,
+            PreferenceKeys.widgetShowCountdown: true,
+            PreferenceKeys.widgetShowDate: true,
             PreferenceKeys.notifyAtPrayerTime: true,
             PreferenceKeys.preAlertEnabled: true,
             PreferenceKeys.preAlertMinutes: 15,
@@ -219,5 +226,45 @@ struct Preferences {
     /// Markers the UI should list, honouring `showSecondaryMarkers`.
     var visiblePrayers: [Prayer] {
         showSecondaryMarkers ? Prayer.displayOrder : Prayer.displayOrder.filter(\.isObligatory)
+    }
+
+    // MARK: Widget
+
+    /// Whether the widget shows the zone name.
+    var widgetShowLocation: Bool {
+        get { defaults.bool(forKey: PreferenceKeys.widgetShowLocation) }
+        nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.widgetShowLocation) }
+    }
+
+    /// Whether the widget shows the "in 38 min" line.
+    var widgetShowCountdown: Bool {
+        get { defaults.bool(forKey: PreferenceKeys.widgetShowCountdown) }
+        nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.widgetShowCountdown) }
+    }
+
+    /// Whether the widget shows the Hijri date.
+    var widgetShowDate: Bool {
+        get { defaults.bool(forKey: PreferenceKeys.widgetShowDate) }
+        nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.widgetShowDate) }
+    }
+
+    /// The settings bundle handed to the widget.
+    var widgetDisplaySettings: WidgetDisplaySettings {
+        WidgetDisplaySettings(
+            showSecondaryMarkers: showSecondaryMarkers,
+            use24HourClock: use24HourClock,
+            showLocation: widgetShowLocation,
+            showCountdown: widgetShowCountdown,
+            showDate: widgetShowDate
+        )
+    }
+
+    // MARK: Coverage warnings
+
+    /// When the user was last told the prayer times are going stale, so the
+    /// warning doesn't repeat on every failed refresh.
+    var lastCoverageWarning: Date? {
+        get { defaults.object(forKey: PreferenceKeys.lastCoverageWarning) as? Date }
+        nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.lastCoverageWarning) }
     }
 }

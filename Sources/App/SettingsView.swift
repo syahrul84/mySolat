@@ -477,8 +477,12 @@ private struct AppearanceSettings: View {
     @State private var use24Hour = false
     @State private var showSecondary = true
     @State private var launchAtLogin = false
+    @State private var widgetLocation = true
+    @State private var widgetCountdown = true
+    @State private var widgetDate = true
 
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 16) {
             GroupBox("Menu bar") {
                 VStack(alignment: .leading, spacing: 10) {
@@ -525,6 +529,38 @@ private struct AppearanceSettings: View {
                 .padding(6)
             }
 
+            GroupBox("Widget") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Applies to every widget size. The prayer list and times always show.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Toggle("Location", isOn: $widgetLocation)
+                        .onValueChange(of: widgetLocation) { value in
+                            state.prefs.widgetShowLocation = value
+                            commit()
+                        }
+                    Toggle("Countdown to the next prayer", isOn: $widgetCountdown)
+                        .onValueChange(of: widgetCountdown) { value in
+                            state.prefs.widgetShowCountdown = value
+                            commit()
+                        }
+                    Toggle("Hijri date", isOn: $widgetDate)
+                        .onValueChange(of: widgetDate) { value in
+                            state.prefs.widgetShowDate = value
+                            commit()
+                        }
+
+                    Text("\"Show Imsak, Syuruk and Dhuha\" above applies to the widget too.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(6)
+            }
+
             GroupBox("Startup") {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Launch mySolat at login", isOn: $launchAtLogin)
@@ -544,11 +580,16 @@ private struct AppearanceSettings: View {
 
             Spacer()
         }
+        .padding(2)
+        }
         .onAppear {
             style = state.prefs.menuBarStyle
             use24Hour = state.prefs.use24HourClock
             showSecondary = state.prefs.showSecondaryMarkers
             launchAtLogin = LaunchAtLogin.isEnabled
+            widgetLocation = state.prefs.widgetShowLocation
+            widgetCountdown = state.prefs.widgetShowCountdown
+            widgetDate = state.prefs.widgetShowDate
         }
     }
 

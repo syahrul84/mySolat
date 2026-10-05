@@ -184,6 +184,34 @@ final class NotificationScheduler {
         center.removeDeliveredNotifications(withIdentifiers: stale.map(\.request.identifier))
     }
 
+    /// Warns that the cached prayer times are running out and cannot be renewed.
+    ///
+    /// Deliberately bypasses the prayer-alert toggles: those govern "it is time to
+    /// pray", whereas this says the app is about to stop knowing when that is.
+    /// Someone who has turned prayer notifications off still needs to hear it.
+    func warnPrayerTimesStale(daysRemaining: Int, reason: String, prefs: Preferences) async {
+        guard isAuthorized else { return }
+
+        let content = UNMutableNotificationContent()
+        if daysRemaining <= 0 {
+            content.title = "mySolat has no prayer times left"
+            content.body = "Couldn't reach the prayer time service. Connect to the internet and open mySolat to refresh. \(reason)"
+        } else {
+            content.title = "Prayer times run out in \(daysRemaining) day\(daysRemaining == 1 ? "" : "s")"
+            content.body = "mySolat couldn't refresh them automatically. They'll update once you're back online. \(reason)"
+        }
+        content.interruptionLevel = .active
+        if prefs.notificationSoundEnabled { content.sound = .default }
+
+        let request = UNNotificationRequest(
+            identifier: "mySolat.coverage.\(SolatCalendar.dayFormatter("yyyyMMdd").string(from: Date()))",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+        )
+        try? await center.add(request)
+        Self.log.info("coverage warning posted: \(daysRemaining, privacy: .public) days left")
+    }
+
     /// Posts an immediate test alert so the user can confirm the setup works.
     func sendTestNotification(prefs: Preferences) async {
         guard isAuthorized else { return }

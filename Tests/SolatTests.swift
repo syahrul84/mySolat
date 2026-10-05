@@ -424,6 +424,94 @@ func testAlertPreferences() {
     defaults.removePersistentDomain(forName: suiteName)
 }
 
+// MARK: - Widget display settings
+
+func testWidgetDisplaySettings() {
+    section("Widget display settings")
+    let suiteName = "com.syahrul.mySolat.tests.widget"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        check(false, "test defaults suite available"); return
+    }
+    defaults.removePersistentDomain(forName: suiteName)
+    let prefs = Preferences(defaults: defaults)
+
+    // Defaults: everything visible.
+    let d = prefs.widgetDisplaySettings
+    check(d.showLocation, "location shows by default")
+    check(d.showCountdown, "countdown shows by default")
+    check(d.showDate, "date shows by default")
+    check(d.showSecondaryMarkers, "secondary markers show by default")
+    checkEqual(d.visiblePrayers.count, 8, "all eight markers listed by default")
+
+    // The reported bug: hiding the secondary markers must reach the widget.
+    prefs.showSecondaryMarkers = false
+    let hidden = prefs.widgetDisplaySettings
+    checkEqual(hidden.visiblePrayers.count, 5, "hiding secondary markers leaves the five obligatory")
+    check(!hidden.visiblePrayers.contains(.imsak), "Imsak is hidden")
+    check(!hidden.visiblePrayers.contains(.syuruk), "Syuruk is hidden")
+    check(!hidden.visiblePrayers.contains(.dhuha), "Dhuha is hidden")
+    check(hidden.visiblePrayers.contains(.fajr), "Subuh still listed")
+
+    // Each widget toggle is independent.
+    prefs.widgetShowLocation = false
+    prefs.widgetShowCountdown = true
+    prefs.widgetShowDate = false
+    let mixed = prefs.widgetDisplaySettings
+    check(!mixed.showLocation, "location can be hidden on its own")
+    check(mixed.showCountdown, "countdown unaffected")
+    check(!mixed.showDate, "date can be hidden on its own")
+
+    // Round-trips through the file the widget actually reads.
+    check(WidgetDisplaySettings.write(mixed), "settings file written")
+    let loaded = WidgetDisplaySettings.load(fallback: prefs)
+    checkEqual(loaded, mixed, "widget reads back exactly what the app wrote")
+    checkEqual(loaded.visiblePrayers.count, 5, "marker choice survives the round trip")
+
+    // Restore a known state for the next run, then confirm it propagates.
+    let all = WidgetDisplaySettings.default
+    check(WidgetDisplaySettings.write(all), "defaults written back")
+    checkEqual(WidgetDisplaySettings.load(fallback: prefs), all, "defaults read back")
+
+    defaults.removePersistentDomain(forName: suiteName)
+}
+
+// MARK: - Coverage warnings
+
+func testCoverageWarningThreshold() {
+    section("Stale prayer-times warning")
+    let suiteName = "com.syahrul.mySolat.tests.coverage"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        check(false, "test defaults suite available"); return
+    }
+    defaults.removePersistentDomain(forName: suiteName)
+    let prefs = Preferences(defaults: defaults)
+
+    check(prefs.lastCoverageWarning == nil, "no warning recorded initially")
+
+    // The store refetches automatically below this threshold, so it's also the
+    // point at which a persistent failure is worth telling the user about.
+    checkEqual(PrayerStore.minimumCoverageDays, 30, "auto-refresh threshold is 30 days")
+    check(PrayerStore.targetCoverageDays > PrayerStore.minimumCoverageDays,
+          "target coverage exceeds the minimum, so refreshes have headroom")
+
+    let now = Date()
+    prefs.lastCoverageWarning = now
+    check(prefs.lastCoverageWarning != nil, "warning timestamp persists")
+
+    // Rate limiting: within a day, don't warn again.
+    let elapsed = Date().timeIntervalSince(prefs.lastCoverageWarning!)
+    check(elapsed < 24 * 60 * 60, "a warning just issued is inside the quiet period")
+
+    prefs.lastCoverageWarning = now.addingTimeInterval(-25 * 60 * 60)
+    let elapsedOld = Date().timeIntervalSince(prefs.lastCoverageWarning!)
+    check(elapsedOld > 24 * 60 * 60, "a day-old warning is outside the quiet period")
+
+    prefs.lastCoverageWarning = nil
+    check(prefs.lastCoverageWarning == nil, "a successful refresh clears the record")
+
+    defaults.removePersistentDomain(forName: suiteName)
+}
+
 // MARK: - Fired-alert bookkeeping
 
 func testFiredIDPruning() {
@@ -726,6 +814,8 @@ struct TestRunner {
         testCatchUpWindow()
         testNotificationSuppression()
         testFiredIDPruning()
+        testWidgetDisplaySettings()
+        testCoverageWarningThreshold()
         await testStoreIgnoresForeignZoneCache()
         testZoneCatalog()
         testWidgetDataPath()

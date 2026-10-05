@@ -13,8 +13,15 @@ struct PrayerEntry: TimelineEntry {
     let zoneDescription: String
     let hijri: String?
     let use24Hour: Bool
-    let visiblePrayers: [Prayer]
+    /// What the widget is allowed to draw, including which markers to list. Read from the shared file, so it
+    /// follows the app even though `UserDefaults` does not cross the sandbox
+    /// reliably here.
+    let display: WidgetDisplaySettings
     let isPlaceholder: Bool
+
+    /// Markers this entry should list. Derived, so it cannot drift from `display`
+    /// the way a second stored copy did.
+    var visiblePrayers: [Prayer] { display.visiblePrayers }
 
     static func placeholder(now: Date = Date()) -> PrayerEntry {
         PrayerEntry(
@@ -24,7 +31,7 @@ struct PrayerEntry: TimelineEntry {
             zoneDescription: "Open mySolat",
             hijri: nil,
             use24Hour: false,
-            visiblePrayers: Prayer.displayOrder.filter(\.isObligatory),
+            display: .default,
             isPlaceholder: true
         )
     }
@@ -58,7 +65,7 @@ struct PrayerEntry: TimelineEntry {
             zoneDescription: "Gombak, Petaling, Sepang",
             hijri: SolatCalendar.formatHijri(day.hijri),
             use24Hour: false,
-            visiblePrayers: Prayer.displayOrder,
+            display: .default,
             isPlaceholder: true
         )
     }

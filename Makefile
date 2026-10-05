@@ -19,7 +19,7 @@
 APP_NAME      := mySolat
 WIDGET_NAME   := SolatWidget
 BUNDLE_ID     := com.syahrul.mySolat
-VERSION       ?= 1.0.5
+VERSION       ?= 1.0.6
 BUILD_NUMBER  ?= 1
 DEPLOY_TARGET := 13.0
 

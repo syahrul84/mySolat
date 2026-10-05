@@ -60,6 +60,8 @@ struct PrayerTimelineProvider: TimelineProvider {
 
     private func makeEntry(for now: Date) async -> PrayerEntry {
         let prefs = Preferences()
+        // Read from the shared file first; see WidgetDisplaySettings for why.
+        let display = WidgetDisplaySettings.load(fallback: prefs)
         var cache = PrayerCacheFile.load()
 
         // Nothing shared with us — fetch directly rather than showing an empty box.
@@ -78,8 +80,8 @@ struct PrayerTimelineProvider: TimelineProvider {
             next: next,
             zoneDescription: ZoneCatalog.shared.describe(code: cache.zone),
             hijri: SolatCalendar.formatHijri(day.hijri),
-            use24Hour: prefs.use24HourClock,
-            visiblePrayers: prefs.visiblePrayers,
+            use24Hour: display.use24HourClock,
+            display: display,
             isPlaceholder: false
         )
     }

@@ -48,20 +48,24 @@ struct SmallWidget: View {
                     .lineLimit(1)
                     .padding(.top, 1)
 
-                Text(next.date, style: .relative)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if entry.display.showCountdown {
+                    Text(next.date, style: .relative)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             } else {
                 PlaceholderBody()
             }
 
             Spacer(minLength: 4)
 
-            Text(entry.zoneDescription)
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
-                .lineLimit(2)
+            if entry.display.showLocation {
+                Text(entry.zoneDescription)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -80,7 +84,8 @@ struct MediumWidget: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            WidgetHeader(entry: entry)
+            let header = WidgetHeader(entry: entry)
+            if !header.isEmpty { header }
 
             if rows.isEmpty {
                 PlaceholderBody()
@@ -124,7 +129,8 @@ struct LargeWidget: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            WidgetHeader(entry: entry)
+            let header = WidgetHeader(entry: entry)
+            if !header.isEmpty { header }
 
             if let next = entry.next {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -133,9 +139,11 @@ struct LargeWidget: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Text("\(next.prayer.displayName) · \(SolatCalendar.string(for: next.date, use24Hour: entry.use24Hour))")
                             .font(.system(size: 14, weight: .semibold))
-                        Text(next.date, style: .relative)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+                        if entry.display.showCountdown {
+                            Text(next.date, style: .relative)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
                 }
@@ -169,17 +177,26 @@ private struct WidgetHeader: View {
     let entry: PrayerEntry
 
     var body: some View {
+        // Both lines can be switched off, in which case the header collapses and
+        // the prayer list gets the space instead of an empty gap.
         VStack(alignment: .leading, spacing: 1) {
-            Text(entry.zoneDescription)
-                .font(.system(size: 11, weight: .semibold))
-                .lineLimit(1)
-            if let hijri = entry.hijri {
+            if entry.display.showLocation {
+                Text(entry.zoneDescription)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+            }
+            if entry.display.showDate, let hijri = entry.hijri {
                 Text(hijri)
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
+    }
+
+    /// True when the header would draw nothing, so callers can skip its spacing.
+    var isEmpty: Bool {
+        !entry.display.showLocation && !(entry.display.showDate && entry.hijri != nil)
     }
 }
 

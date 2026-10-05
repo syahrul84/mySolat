@@ -90,7 +90,7 @@ struct RenderWidgets {
                 zoneDescription: ZoneCatalog.shared.describe(code: cache.zone),
                 hijri: SolatCalendar.formatHijri(day.hijri),
                 use24Hour: Preferences().use24HourClock,
-                visiblePrayers: Prayer.displayOrder,
+                display: WidgetDisplaySettings.load(fallback: Preferences()),
                 isPlaceholder: false
             )
             FileHandle.standardOutput.write("· using cached times for \(cache.zone)\n".data(using: .utf8)!)

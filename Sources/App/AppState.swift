@@ -79,6 +79,7 @@ final class AppState: ObservableObject {
         startTimers()
         observeWake()
         updateMenuBarClock()
+        WidgetDisplaySettings.write(prefs.widgetDisplaySettings)
 
         Task {
             await refreshFromCache()
@@ -278,16 +279,47 @@ final class AppState: ObservableObject {
         do {
             _ = try await store.refresh(force: force)
             errorMessage = nil
+            // Recovered: let a future problem warn again immediately.
+            prefs.lastCoverageWarning = nil
         } catch {
-            // Keep showing cached times; only surface the error if we have nothing.
             let coverage = await store.coverageDays
-            errorMessage = coverage > 0
-                ? nil
-                : (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+
+            // Cached times still cover us, so this isn't worth a banner — the
+            // coverage figure in the popover already shows the shortfall.
+            errorMessage = coverage > 0 ? nil : reason
+
+            await warnIfCoverageRunningOut(coverage: coverage, reason: reason)
         }
         await refreshFromCache()
         await ensureSchedule()
         reloadWidget()
+    }
+
+    /// Tells the user when the schedule is running out and can't be topped up.
+    ///
+    /// The store refetches automatically once coverage drops below 30 days, so a
+    /// failure here means repeated attempts are failing — offline for a long
+    /// stretch, or the API is down. Left unsaid, the times would simply run out
+    /// one day with no warning.
+    ///
+    /// Warnings are rate-limited to one a day: the refresh runs hourly, and
+    /// nagging every hour about something the user may not be able to fix is
+    /// worse than useless.
+    private func warnIfCoverageRunningOut(coverage: Int, reason: String) async {
+        guard coverage < PrayerStore.minimumCoverageDays else { return }
+
+        if let last = prefs.lastCoverageWarning,
+           Date().timeIntervalSince(last) < 24 * 60 * 60 {
+            return
+        }
+        prefs.lastCoverageWarning = Date()
+
+        await scheduler.warnPrayerTimesStale(
+            daysRemaining: coverage,
+            reason: reason,
+            prefs: prefs
+        )
     }
 
     /// Recomputes the rolling notification window from the current cache.
@@ -360,6 +392,9 @@ final class AppState: ObservableObject {
     func openRepo() { NSWorkspace.shared.open(AppIdentifiers.repoURL) }
 
     private func reloadWidget() {
+        // Publish the display settings before asking the widget to redraw, so it
+        // reads the new values on the very next timeline rather than one behind.
+        WidgetDisplaySettings.write(prefs.widgetDisplaySettings)
         WidgetCenter.shared.reloadTimelines(ofKind: AppIdentifiers.widgetKind)
     }
 
