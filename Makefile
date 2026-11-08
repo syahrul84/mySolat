@@ -18,7 +18,7 @@
 
 APP_NAME      := mySolat
 WIDGET_NAME   := SolatWidget
-BUNDLE_ID     := com.syahrul.mySolat
+BUNDLE_ID     := com.ginlabs.mysolat
 VERSION       ?= 1.0.6
 BUILD_NUMBER  ?= 1
 DEPLOY_TARGET := 13.0
@@ -116,9 +116,9 @@ bundle:
 	    EXTRA="-Xlinker -e -Xlinker _NSExtensionMain"
 
 	@echo "→ assembling resources"
-	@sed -e 's/__VERSION__/$(VERSION)/g' -e 's/__BUILD__/$(BUILD_NUMBER)/g' \
+	@sed -e 's/$$(MARKETING_VERSION)/$(VERSION)/g' -e 's/$$(CURRENT_PROJECT_VERSION)/$(BUILD_NUMBER)/g' \
 	    Resources/App-Info.plist > $(APP_BUNDLE)/Contents/Info.plist
-	@sed -e 's/__VERSION__/$(VERSION)/g' -e 's/__BUILD__/$(BUILD_NUMBER)/g' \
+	@sed -e 's/$$(MARKETING_VERSION)/$(VERSION)/g' -e 's/$$(CURRENT_PROJECT_VERSION)/$(BUILD_NUMBER)/g' \
 	    Resources/Widget-Info.plist > $(APPEX)/Contents/Info.plist
 	@printf 'APPL????' > $(APP_BUNDLE)/Contents/PkgInfo
 	@cp Resources/zones.json $(APP_BUNDLE)/Contents/Resources/

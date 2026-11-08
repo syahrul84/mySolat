@@ -33,7 +33,6 @@ final class AppState: ObservableObject {
     // MARK: Collaborators
 
     let prefs = Preferences()
-    let updater = GitHubUpdater()
     let scheduler = NotificationScheduler()
     let alerts = AlertPresenter()
     /// Gates popups on the user actually being able to see them.
@@ -87,7 +86,6 @@ final class AppState: ObservableObject {
             await ensureSchedule()
             await refresh(force: false)
             await ZoneCatalog.shared.refresh(api: api)
-            updater.checkInBackgroundIfNeeded(prefs: prefs)
             prefs.hasCompletedSetup = true
         }
     }
@@ -256,7 +254,6 @@ final class AppState: ObservableObject {
         await refresh(force: false)
         await ensureSchedule()
         reloadWidget()
-        updater.checkInBackgroundIfNeeded(prefs: prefs)
     }
 
     // MARK: Data
@@ -388,7 +385,6 @@ final class AppState: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    func openTipPage() { NSWorkspace.shared.open(AppIdentifiers.tipURL) }
     func openRepo() { NSWorkspace.shared.open(AppIdentifiers.repoURL) }
 
     private func reloadWidget() {

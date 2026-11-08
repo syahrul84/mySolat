@@ -13,7 +13,7 @@
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.syahrul.mySolat</string>
+	<string>com.ginlabs.mysolat</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -21,11 +21,11 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>__VERSION__</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>__BUILD__</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.reference</string>
+	<string>public.app-category.lifestyle</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 
@@ -47,12 +47,8 @@
 	<key>NSSupportsSuddenTermination</key>
 	<false/>
 
-	<!--
-	  Optional update hardening. Paste the base64 Ed25519 public key produced by
-	  `make updater-keys` here, and CI will sign each release archive. When this is
-	  empty, updates are verified by SHA-256 against the release's checksums.txt.
-	-->
-	<key>UpdatePublicKey</key>
-	<string></string>
+	<!-- HTTPS only, through Apple's own networking: no export paperwork needed. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

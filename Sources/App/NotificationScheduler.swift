@@ -17,7 +17,7 @@ final class NotificationScheduler {
     private static let requestBudget = 58
 
     private let center = UNUserNotificationCenter.current()
-    private static let log = Logger(subsystem: "com.syahrul.mySolat", category: "notifications")
+    private static let log = Logger(subsystem: "com.ginlabs.mysolat", category: "notifications")
 
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var lastScheduledCount = 0

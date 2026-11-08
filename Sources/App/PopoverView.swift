@@ -160,13 +160,6 @@ struct PopoverView: View {
                 MenuButton(title: "Settings…", symbol: "gearshape", shortcut: "⌘,") {
                     openSettings()
                 }
-                MenuButton(title: "Support this app", symbol: "cup.and.saucer") {
-                    state.openTipPage()
-                }
-                MenuButton(title: "Check for Updates…", symbol: "arrow.down.circle") {
-                    state.updater.checkForUpdates()
-                    openSettings()
-                }
                 MenuButton(title: "Quit mySolat", symbol: "power", shortcut: "⌘Q") {
                     NSApp.terminate(nil)
                 }

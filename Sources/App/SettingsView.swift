@@ -8,7 +8,7 @@ struct SettingsView: View {
     /// An explicit switcher rather than `TabView`: inside a plain `Window` scene
     /// TabView's bar renders empty, so the sections are driven directly.
     enum Tab: String, CaseIterable, Identifiable {
-        case location, alerts, appearance, updates, about
+        case location, alerts, appearance, about
 
         var id: String { rawValue }
 
@@ -17,7 +17,6 @@ struct SettingsView: View {
             case .location: return "Location"
             case .alerts: return "Alerts"
             case .appearance: return "Appearance"
-            case .updates: return "Updates"
             case .about: return "About"
             }
         }
@@ -27,7 +26,6 @@ struct SettingsView: View {
             case .location: return "mappin.and.ellipse"
             case .alerts: return "bell"
             case .appearance: return "menubar.rectangle"
-            case .updates: return "arrow.down.circle"
             case .about: return "info.circle"
             }
         }
@@ -53,7 +51,6 @@ struct SettingsView: View {
                 case .location: LocationSettings()
                 case .alerts: NotificationSettings()
                 case .appearance: AppearanceSettings()
-                case .updates: UpdateSettings(updater: state.updater)
                 case .about: AboutSettings()
                 }
             }
@@ -598,174 +595,6 @@ private struct AppearanceSettings: View {
     }
 }
 
-// MARK: - Updates
-
-private struct UpdateSettings: View {
-    @EnvironmentObject private var state: AppState
-
-    /// Observed directly rather than reached through `state.updater`.
-    ///
-    /// `GitHubUpdater` is its own `ObservableObject`, and SwiftUI does not
-    /// propagate a nested observable's changes to a view observing the parent —
-    /// so download progress and the "ready to restart" state were published but
-    /// never redrawn, making Update Now look like it did nothing.
-    @ObservedObject var updater: GitHubUpdater
-
-    @State private var autoCheck = true
-
-    private static let relativeFormatter = RelativeDateTimeFormatter()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            GroupBox("Automatic updates") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Toggle("Check for updates automatically", isOn: $autoCheck)
-                        .onValueChange(of: autoCheck) { value in
-                            state.prefs.autoUpdateCheck = value
-                        }
-
-                    HStack {
-                        Button("Check Now") { updater.checkForUpdates() }
-                            .disabled(updater.phase.isBusy)
-                        Spacer()
-                        if let last = updater.lastChecked {
-                            Text("Checked \(Self.relativeFormatter.localizedString(for: last, relativeTo: Date()))")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-
-                    statusLine
-
-                    Text("Updates are downloaded from GitHub Releases, checked against the published SHA-256, then installed in place. mySolat restarts itself when it's done.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(6)
-            }
-
-            GroupBox("Version") {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("mySolat \(AppVersion.displayString)")
-                            .font(.system(size: 12, weight: .medium))
-                        Text(archDescription)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("All Releases") { updater.openReleasePage() }
-                        .controlSize(.small)
-                }
-                .padding(6)
-            }
-
-            Spacer()
-        }
-        .onAppear { autoCheck = state.prefs.autoUpdateCheck }
-    }
-
-    @ViewBuilder
-    private var statusLine: some View {
-        switch updater.phase {
-        case .idle:
-            EmptyView()
-
-        case .checking:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Checking…").font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-
-        case .upToDate:
-            Label("You're on the latest version.", systemImage: "checkmark.circle.fill")
-                .font(.system(size: 11))
-                .foregroundStyle(.green)
-
-        case .available(let release):
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Label("Version \(release.version) is available", systemImage: "arrow.down.circle.fill")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.tint)
-                    Spacer()
-                    Button("Release Notes") { updater.openReleasePage() }
-                        .buttonStyle(.link)
-                        .font(.system(size: 10))
-                    Button("Update Now") { updater.downloadAndInstall() }
-                        .controlSize(.small)
-                        .buttonStyle(.borderedProminent)
-                }
-                if !release.notes.isEmpty {
-                    ScrollView {
-                        Text(release.notes)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
-                    .frame(maxHeight: 90)
-                }
-            }
-
-        case .downloading(let fraction):
-            VStack(alignment: .leading, spacing: 4) {
-                ProgressView(value: fraction)
-                Text("Downloading… \(Int(fraction * 100))%")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-
-        case .verifying:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Verifying download…").font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-
-        case .installing:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Installing…").font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-
-        case .readyToRelaunch:
-            HStack(spacing: 8) {
-                Label("Update ready", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.green)
-                Spacer()
-                Button("Restart mySolat") { updater.relaunchAndFinishUpdate() }
-                    .controlSize(.small)
-                    .buttonStyle(.borderedProminent)
-            }
-
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 6) {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Button("Download Manually") { updater.openReleasePage() }
-                        .controlSize(.small)
-                    Button("Dismiss") { updater.dismissStatus() }
-                        .controlSize(.small)
-                }
-            }
-        }
-    }
-
-    private var archDescription: String {
-        #if arch(arm64)
-        return "Apple silicon · universal build"
-        #else
-        return "Intel (x86_64) · universal build"
-        #endif
-    }
-}
-
 // MARK: - About
 
 private struct AboutSettings: View {
@@ -806,25 +635,6 @@ private struct AboutSettings: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Enjoying mySolat?")
-                    .font(.system(size: 12, weight: .medium))
-                Text("It's free and open source. If it's useful to you, a small tip helps me keep it maintained.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    state.openTipPage()
-                } label: {
-                    Label("Buy me a coffee", systemImage: "cup.and.saucer.fill")
-                }
-                .controlSize(.large)
-                .padding(.top, 2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
 
             HStack(spacing: 14) {
                 Button("GitHub") { state.openRepo() }.buttonStyle(.link)

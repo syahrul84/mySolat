@@ -15,9 +15,8 @@ update-key*
 .Spotlight-V100
 .Trashes
 
-# Xcode / SwiftPM (unused here, but harmless to guard against)
-*.xcodeproj/
-*.xcworkspace/
+# Xcode: the project itself is kept; only per-user state is ignored
+xcuserdata/
 .swiftpm/
 .build/
 Package.resolved

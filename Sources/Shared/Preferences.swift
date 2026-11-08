@@ -46,8 +46,6 @@ enum PreferenceKeys {
     static let catchUpWindowMinutes = "catchUpWindowMinutes"
     static let firedAlertIDs = "firedAlertIDs"
     static let launchAtLogin = "launchAtLogin"
-    static let autoUpdateCheck = "autoUpdateCheck"
-    static let lastUpdateCheck = "lastUpdateCheck"
     static let hasCompletedSetup = "hasCompletedSetup"
 }
 
@@ -79,7 +77,6 @@ struct Preferences {
             PreferenceKeys.catchUpWindowMinutes: 30,
             PreferenceKeys.enabledPrayers: Prayer.allCases.filter(\.isObligatory).map(\.rawValue),
             PreferenceKeys.launchAtLogin: false,
-            PreferenceKeys.autoUpdateCheck: true,
             PreferenceKeys.hasCompletedSetup: false,
         ])
     }
@@ -211,11 +208,6 @@ struct Preferences {
     var launchAtLogin: Bool {
         get { defaults.bool(forKey: PreferenceKeys.launchAtLogin) }
         nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.launchAtLogin) }
-    }
-
-    var autoUpdateCheck: Bool {
-        get { defaults.bool(forKey: PreferenceKeys.autoUpdateCheck) }
-        nonmutating set { defaults.set(newValue, forKey: PreferenceKeys.autoUpdateCheck) }
     }
 
     var hasCompletedSetup: Bool {

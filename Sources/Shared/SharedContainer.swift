@@ -2,24 +2,18 @@ import Foundation
 
 /// Identifiers shared by the app and the widget extension.
 enum AppIdentifiers {
-    static let appBundleID = "com.syahrul.mySolat"
-    static let widgetBundleID = "com.syahrul.mySolat.SolatWidget"
-    static let widgetKind = "com.syahrul.mySolat.PrayerWidget"
-    static let appGroup = "group.com.syahrul.mySolat"
+    static let appBundleID = "com.ginlabs.mysolat"
+    static let widgetBundleID = "com.ginlabs.mysolat.SolatWidget"
+    static let widgetKind = "com.ginlabs.mysolat.PrayerWidget"
+    /// macOS App Groups are prefixed with the Team ID so they also work on macOS 13 and 14.
+    static let appGroup = "3UZAQDJ7T4.group.com.ginlabs.mysolat"
 
     static let repoOwner = "syahrul84"
     static let repoName = "mySolat"
     static var repoURL: URL { URL(string: "https://github.com/\(repoOwner)/\(repoName)")! }
-    static var releasesAPIURL: URL {
-        URL(string: "https://api.github.com/repos/\(repoOwner)/\(repoName)/releases/latest")!
-    }
-    static var latestReleaseURL: URL {
-        URL(string: "https://github.com/\(repoOwner)/\(repoName)/releases/latest")!
-    }
     static var licenseURL: URL {
         URL(string: "https://github.com/\(repoOwner)/\(repoName)/blob/main/LICENSE")!
     }
-    static var tipURL: URL { URL(string: "https://ko-fi.com/syahrul84")! }
 
     /// Shown in the About pane and the bundle's copyright field.
     static let authorName = "Syahrul Farhan"
