@@ -11,9 +11,11 @@ Waktu solat JAKIM — always visible, works offline, and reminds you before each
 <img src="docs/screenshots/menubar.png" width="150" alt="mySolat in the menu bar">
 
 [![CI](https://github.com/syahrul84/mySolat/actions/workflows/ci.yml/badge.svg)](https://github.com/syahrul84/mySolat/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/syahrul84/mySolat?label=download)](https://github.com/syahrul84/mySolat/releases/latest)
+[![Mac App Store](https://img.shields.io/badge/Mac%20App%20Store-download-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/app/mysolat/id6831867566)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![macOS](https://img.shields.io/badge/macOS-13%2B%20·%20Intel%20%26%20Apple%20silicon-lightgrey)](https://github.com/syahrul84/mySolat/releases/latest)
+[![macOS](https://img.shields.io/badge/macOS-13%2B%20·%20Intel%20%26%20Apple%20silicon-lightgrey)](https://apps.apple.com/app/mysolat/id6831867566)
+
+<a href="https://apps.apple.com/app/mysolat/id6831867566"><b>Download on the Mac App Store</b></a>
 
 </div>
 
@@ -79,14 +81,14 @@ Small, medium and large — for the desktop and Notification Center.
 - **Quiet when you're away** — nothing fires at a locked, sleeping or screen-savered Mac. Miss Subuh because the lid was shut? It shows when you come back, if you're within the catch-up window.
 - **Works offline** — at least 30 days of prayer times are stored locally (usually ~45). Fly, commute, lose your Wi-Fi; the times are still there.
 - **All 60 JAKIM zones** — pick your district, or let mySolat detect it from your location.
-- **Updates itself** — checks GitHub Releases, verifies the download, installs in place, restarts.
+- **Updates through the App Store** — like any other Mac app.
 - **Universal** — one build runs natively on Apple silicon and Intel.
 
 ## Install
 
-Download the latest `.dmg` from **[Releases](https://github.com/syahrul84/mySolat/releases/latest)**, drag mySolat into Applications, then **right-click it and choose Open**.
+Get mySolat free from the **[Mac App Store](https://apps.apple.com/app/mysolat/id6831867566)**. The same App Store page also has mySolat for iPhone.
 
-> macOS asks for that right-click the first time because the app isn't notarized by Apple — notarization needs a paid Apple Developer account. Every launch after the first is normal, and auto-updates install without prompting.
+> **Used the GitHub version before?** Quit it, delete it from Applications, then install mySolat from the App Store. The GitHub version (1.0.6 and earlier) no longer gets updates, and the two are separate apps, so set your zone and alerts again in the new one.
 
 mySolat has **no Dock icon** — look for the crescent in your menu bar.
 
@@ -139,25 +141,13 @@ Choose what the menu bar shows, with a live preview. Switch to a 24-hour clock, 
 </tr>
 <tr>
 <td valign="top">
-<img src="docs/screenshots/settings-updates.png" alt="Update settings">
-</td>
-<td valign="top">
-
-### Updates
-
-mySolat checks GitHub Releases daily, verifies the download against the published SHA-256, installs it in place and restarts itself. You can also check on demand.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
 <img src="docs/screenshots/settings-about.png" alt="About tab showing version, author and licence">
 </td>
 <td valign="top">
 
 ### About
 
-Version, licence and credits — plus the tip jar, if mySolat has earned one.
+Version, licence and credits.
 
 </td>
 </tr>
@@ -178,12 +168,12 @@ Right-click the desktop → **Edit Widgets**, search **mySolat**, then drag the 
 | **Presence detection** | Lock state is queried via `CGSessionCopyCurrentDictionary` rather than tracked purely from notifications, which don't queue while an app is suspended. Display sleep comes from both the `NSWorkspace` notification and a live `CGDisplayIsAsleep` query, because the notification can arrive before the query flips. |
 | **Notification limit** | macOS allows 64 *pending* notifications per app. With 5 prayers × 2 alert kinds that's 10 a day, so mySolat schedules a rolling window (~58 requests) and re-arms it hourly, on wake, and whenever settings change. The cached prayer data is unaffected. |
 | **App ↔ widget** | A macOS widget extension is sandboxed, so the two share an App Group container. If that's unavailable the widget falls back to fetching its own month, so it never renders an empty box. |
-| **Auto-update** | Reads the GitHub Releases API, downloads the universal `.zip`, verifies SHA-256 against the release's `checksums.txt` (and an Ed25519 signature when configured), checks the new bundle's identifier and version, then hands the swap to a script that waits for the app to exit before replacing it and relaunching. |
-| **Sandboxing** | The widget is sandboxed. The main app is not — it replaces its own bundle when updating and registers a login item, both of which the sandbox forbids. |
+| **Updates** | Delivered by the Mac App Store. |
+| **Sandboxing** | The app and the widget are both sandboxed, as the Mac App Store requires. |
 
 ## Building from source
 
-**Xcode is not required.** The Command Line Tools are enough — there's no `.xcodeproj` and no SwiftPM manifest, just `swiftc` driven by a `Makefile`.
+**Xcode is not required to build and test.** The Command Line Tools are enough: the `Makefile` drives `swiftc` directly. `mySolat.xcodeproj` is only used to archive the App Store build.
 
 ```bash
 git clone https://github.com/syahrul84/mySolat.git
@@ -198,14 +188,13 @@ make run
 | `make run` | Build, install to `~/Applications`, relaunch |
 | `make test` | Run the test suite |
 | `make check` | Type-check the app and widget targets |
-| `make release` | `.zip` + `.dmg` + `checksums.txt` in `dist/` |
 | `make screenshots` | Regenerate the widget images in this README |
 | `make clean` | Remove `build/` and `dist/` |
 
 Stamp a version onto the bundle:
 
 ```bash
-make release VERSION=1.0.1 BUILD_NUMBER=7
+make VERSION=1.0.7 BUILD_NUMBER=3
 ```
 
 `make test` hits the live API. To skip that:
@@ -218,11 +207,11 @@ SOLAT_SKIP_NETWORK=1 make test
 
 ```
 Sources/Shared/    models, API client, cache, preferences — compiled into both targets
-Sources/App/       menu bar app, settings, notifications, updater
+Sources/App/       menu bar app, settings, notifications
 Sources/Widget/    WidgetKit extension
 Resources/         Info.plists, entitlements, logo, bundled zone list
 Tests/             assertion harness (no XCTest — that needs Xcode)
-scripts/           icon, DMG, widget rendering, update-signing helpers
+scripts/           icon and widget rendering helpers
 docs/screenshots/  the images in this README
 ```
 
@@ -230,24 +219,11 @@ The shared sources are compiled into both the app and the widget rather than lin
 
 The widget and popup images above are generated by `make screenshots`, which renders the real views against the real cached times — so they can't drift from the code.
 
-## Cutting a release
+## Releasing
 
-```bash
-git tag v1.0.1
-git push origin v1.0.1
-```
+mySolat ships through the Mac App Store. Bump the version in `mySolat.xcodeproj`, archive it in Xcode (**Product › Archive**), then **Distribute App › App Store Connect** and submit the new version for review. The App Store listing text lives in [docs/app-store.md](docs/app-store.md).
 
-The [release workflow](.github/workflows/release.yml) builds the universal app, runs the tests, verifies the archive it just produced (checksum, signature, bundle version, both architectures), and publishes the Release. Installed copies pick it up within a day, or immediately via **Settings › Updates › Check Now**.
-
-### Optional: sign your updates
-
-Verification against `checksums.txt` is always on. Adding a signing key means an attacker who could serve both a modified archive *and* a matching checksum still couldn't produce a valid signature.
-
-```bash
-make updater-keys
-```
-
-Paste the **public** key into `UpdatePublicKey` in `Resources/App-Info.plist`, and add the **private** key as a repository secret named `UPDATE_SIGNING_KEY`. Never commit the private key — and keep a copy in a password manager, because losing it means installed copies can no longer verify signed updates.
+GitHub Releases are no longer published.
 
 ## Support
 

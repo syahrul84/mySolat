@@ -1,17 +1,12 @@
 # mySolat — build system
 #
-# Deliberately plain `swiftc` + `make`: no Xcode project and no SwiftPM manifest,
-# so the app builds with only the Command Line Tools installed. Every target
-# produces a universal (arm64 + x86_64) binary.
+# Plain `swiftc` + `make` for local builds and tests, so the app builds with only
+# the Command Line Tools installed. Every target produces a universal
+# (arm64 + x86_64) binary. App Store builds are archived from mySolat.xcodeproj.
 #
 #   make            build a universal mySolat.app into build/
 #   make run        build, install to ~/Applications, and launch
 #   make native     fast single-architecture build for iterating
-#   make zip        release archive + checksums.txt (what the updater downloads)
-#   make dmg        drag-install disk image
-#   make release    zip + dmg + checksums
-#   make sign-release  sign the zip with the Ed25519 update key
-#   make updater-keys  generate the Ed25519 key pair used by sign-release
 #   make test        run the test suite
 #   make screenshots regenerate the widget images used in the README
 #   make clean
@@ -26,7 +21,6 @@ DEPLOY_TARGET := 13.0
 BUILD_DIR   := build
 APP_BUNDLE  := $(BUILD_DIR)/$(APP_NAME).app
 APPEX       := $(APP_BUNDLE)/Contents/PlugIns/$(WIDGET_NAME).appex
-DIST_DIR    := dist
 
 SHARED_SRC := $(wildcard Sources/Shared/*.swift)
 APP_SRC    := $(wildcard Sources/App/*.swift)
@@ -43,7 +37,7 @@ SWIFT_FLAGS := -O -parse-as-library -swift-version 5
 CODESIGN_ID ?= -
 
 .DEFAULT_GOAL := app
-.PHONY: app native run install zip dmg release sign-release updater-keys clean check test screenshots version help
+.PHONY: app native run install clean check test screenshots version help
 
 help:
 	@grep -E '^#   make' Makefile | sed 's/^#   //'
@@ -177,35 +171,6 @@ run: install
 	@open $$HOME/Applications/$(APP_NAME).app
 	@echo "✓ launched — look for the moon icon in your menu bar"
 
-# ---------------------------------------------------------------- distribution
-
-# The updater downloads this exact archive and verifies it against checksums.txt.
-zip: app
-	@mkdir -p $(DIST_DIR)
-	@rm -f $(DIST_DIR)/$(APP_NAME)-$(VERSION)-universal.zip
-	@ditto -c -k --sequesterRsrc --keepParent \
-	    $(APP_BUNDLE) $(DIST_DIR)/$(APP_NAME)-$(VERSION)-universal.zip
-	@cd $(DIST_DIR) && shasum -a 256 $(APP_NAME)-$(VERSION)-universal.zip > checksums.txt
-	@cd $(DIST_DIR) && [ -f $(APP_NAME)-$(VERSION).dmg ] && \
-	    shasum -a 256 $(APP_NAME)-$(VERSION).dmg >> checksums.txt || true
-	@echo "✓ $(DIST_DIR)/$(APP_NAME)-$(VERSION)-universal.zip"
-	@cat $(DIST_DIR)/checksums.txt | sed 's/^/  /'
-
-dmg: app
-	@mkdir -p $(DIST_DIR)
-	@scripts/make-dmg.sh "$(APP_BUNDLE)" "$(DIST_DIR)/$(APP_NAME)-$(VERSION).dmg" "$(APP_NAME)"
-	@echo "✓ $(DIST_DIR)/$(APP_NAME)-$(VERSION).dmg"
-
-release: dmg zip
-	@echo "✓ release artifacts in $(DIST_DIR)/"
-
-# Signs the release zip with the Ed25519 key so the in-app updater can verify it.
-sign-release:
-	@scripts/sign-update.sh "$(DIST_DIR)/$(APP_NAME)-$(VERSION)-universal.zip"
-
-updater-keys:
-	@scripts/generate-update-keys.sh
-
 # ---------------------------------------------------------------- misc
 
 test: $(BUILD_DIR)/solat-tests $(BUILD_DIR)/gate-tests
@@ -256,5 +221,5 @@ version:
 	@echo "$(VERSION) (build $(BUILD_NUMBER))"
 
 clean:
-	@rm -rf $(BUILD_DIR) $(DIST_DIR)
+	@rm -rf $(BUILD_DIR) dist
 	@echo "✓ cleaned"

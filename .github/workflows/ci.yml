@@ -42,13 +42,3 @@ jobs:
           grep -q x86_64 /tmp/archs
           lipo -archs build/mySolat.app/Contents/PlugIns/SolatWidget.appex/Contents/MacOS/SolatWidget
           codesign --verify --deep --strict build/mySolat.app
-
-      - name: Package
-        run: make zip
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mySolat-dev-build
-          path: dist/*.zip
-          retention-days: 14
